@@ -1,0 +1,82 @@
+export const mockUsers = [
+  {
+    id: 1,
+    _id: 'u_001',
+    name: 'Priya Nair',
+    email: 'priya.nair@razorpay.com',
+    role: 'Customer Success Manager',
+    role_id: 2,
+    is_active: true,
+    is_new: false,
+    org_id: 'rzp_org_001',
+    profile_picture: null,
+    created_at: '2023-01-10T09:00:00Z',
+  },
+  {
+    id: 2,
+    _id: 'u_002',
+    name: 'Arjun Mehta',
+    email: 'arjun.mehta@razorpay.com',
+    role: 'Customer Success Manager',
+    role_id: 2,
+    is_active: true,
+    is_new: false,
+    org_id: 'rzp_org_001',
+    profile_picture: null,
+    created_at: '2023-02-15T09:00:00Z',
+  },
+  {
+    id: 3,
+    _id: 'u_003',
+    name: 'Sneha Kulkarni',
+    email: 'sneha.kulkarni@razorpay.com',
+    role: 'Customer Success Manager',
+    role_id: 2,
+    is_active: true,
+    is_new: false,
+    org_id: 'rzp_org_001',
+    profile_picture: null,
+    created_at: '2023-03-20T09:00:00Z',
+  },
+  {
+    id: 4,
+    _id: 'u_004',
+    name: 'Rohan Sharma',
+    email: 'rohan.sharma@razorpay.com',
+    role: 'Team Lead - CS',
+    role_id: 3,
+    is_active: true,
+    is_new: false,
+    org_id: 'rzp_org_001',
+    profile_picture: null,
+    created_at: '2022-11-05T09:00:00Z',
+  },
+  {
+    id: 5,
+    _id: 'u_005',
+    name: 'Ananya Iyer',
+    email: 'ananya.iyer@razorpay.com',
+    role: 'VP - Customer Success',
+    role_id: 4,
+    is_active: true,
+    is_new: false,
+    org_id: 'rzp_org_001',
+    profile_picture: null,
+    created_at: '2022-06-01T09:00:00Z',
+  },
+];
+
+export const mockCurrentUser = mockUsers[3]; // Rohan Sharma (Team Lead)
+
+export const mockRoles = [
+  { id: 1, name: 'Admin', description: 'Full access' },
+  { id: 2, name: 'Customer Success Manager', description: 'Manages customer accounts' },
+  { id: 3, name: 'Team Lead - CS', description: 'Leads CS team, manages CSMs' },
+  { id: 4, name: 'VP - Customer Success', description: 'Heads entire CS function' },
+];
+
+export const mockUserTeam = [
+  { ...mockUsers[0], manager_id: 4 },
+  { ...mockUsers[1], manager_id: 4 },
+  { ...mockUsers[2], manager_id: 4 },
+];

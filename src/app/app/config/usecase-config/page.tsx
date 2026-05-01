@@ -1,0 +1,421 @@
+'use client';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  DownloadIcon,
+  MoreHorizontal,
+  Search,
+  Trash2,
+  UploadIcon,
+} from 'lucide-react';
+import { toast } from 'react-toastify';
+import {
+  useDeleteUsecaseConfig,
+  useUploadUsecaseConfig,
+} from '../../../services/mutations/configMutations';
+import * as yaml from 'js-yaml';
+import { saveAs } from 'file-saver';
+import DownloadModal from '../../../../common/components/DownloadModal';
+import ErrorTable from '../../../../common/components/ErrorTable';
+import TableContainer from '../../../../common/components/TableContainer';
+import DeleteModal from '../../../../common/components/DeleteModal';
+import { Dropdown } from '../../../../common/Dropdown';
+import UploadFile from '../../../../common/components/uploadYAMLfile';
+import {
+  downloadTemplateUsecaseConfig,
+  getUsecaseConfig,
+  templateUsecaseConfig,
+} from '../../../api/config/usecase_config';
+
+const UsecaseConfig = () => {
+  const [open, setOpen] = useState(false);
+  const [usecaseConfigData, setUsecaseConfigData] = useState<any>();
+  const [searchPh, setSearchPh] = useState('');
+  const [downloadModalOpen, setdownloadModalOpen] = useState(false);
+  const [downloadAllModalOpen, setdownloadAllModalOpen] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [errorResponseData, setErrorResponseData] = useState();
+
+  const { data: existingUsecaseConfigs, isLoading } = useQuery({
+    queryKey: ['usecase-configs'],
+    queryFn: getUsecaseConfig,
+  });
+
+  const getPlacement = (id: any) => {
+    const isTopStart =
+      id >= 4 &&
+      id <= 1000 &&
+      (id % 5 === 0 || (id % 5 !== 0 && String(id / 5).endsWith('.8')));
+
+    const placementState = 'bottom-start';
+    return placementState;
+  };
+
+  const columns = useMemo(
+    () => [
+      {
+        header: 'Usecase id',
+        enableColumnFilter: false,
+        cell: (cell: any) => (
+          <div className="max-w-64" title={cell?.row?.original?.usecase_id}>
+            <div className="truncate">
+              {cell?.row?.original?.usecase_id ?? '-'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: 'Usecase name',
+        enableColumnFilter: false,
+        cell: (cell: any) => (
+          <div className="max-w-64" title={cell?.row?.original?.name}>
+            <div className="truncate">{cell?.row?.original?.name ?? '-'}</div>
+          </div>
+        ),
+      },
+      {
+        header: 'Usecase description',
+        enableColumnFilter: false,
+        cell: (cell: any) => (
+          <div className="max-w-64" title={cell?.row?.original?.description}>
+            <div className="truncate">
+              {cell?.row?.original?.description ?? '-'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: 'Tags',
+        enableColumnFilter: false,
+        cell: (cell: any) => (
+          <div
+            className="max-w-64"
+            title={cell?.row?.original?.tags?.map(
+              (element: any) => element + '\n'
+            )}
+          >
+            <div className="truncate">
+              {cell?.row?.original?.tags?.map(
+                (element: any) => element + ', \n'
+              ) ?? '-'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: 'Industry',
+        enableColumnFilter: false,
+        cell: (cell: any) => (
+          <div
+            className="max-w-64"
+            title={cell?.row?.original?.industry?.map(
+              (element: any) => element + '\n'
+            )}
+          >
+            <div className="truncate">
+              {cell?.row?.original?.industry?.map(
+                (element: any) => element + ', \n'
+              ) ?? '-'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: 'qualification questions',
+        enableColumnFilter: false,
+        cell: (cell: any) => (
+          <div
+            className="max-w-64"
+            title={cell?.row?.original?.questions?.qualification?.map(
+              (element: any) => element + '\n'
+            )}
+          >
+            <div className="truncate">
+              {cell?.row?.original?.questions?.qualification?.map(
+                (element: any) => element + ', \n'
+              ) ?? '-'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: 'discovery questions',
+        enableColumnFilter: false,
+        cell: (cell: any) => (
+          <div
+            className="max-w-64"
+            title={cell?.row?.original?.questions?.discovery?.map(
+              (element: any) => element + '\n'
+            )}
+          >
+            <div className="truncate">
+              {cell?.row?.original?.questions?.discovery?.map(
+                (element: any) => element + ', \n'
+              ) ?? '-'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: 'Action',
+        enableColumnFilter: false,
+        enableSorting: true,
+        cell: (cell: any) => (
+          <Dropdown className="relative">
+            <Dropdown.Trigger
+              className="flex items-center justify-center size-[30px] p-0 text-slate-500 btn bg-slate-100 hover:text-white hover:bg-slate-600 focus:text-white focus:bg-slate-600 focus:ring focus:ring-slate-100 active:text-white active:bg-slate-600 active:ring active:ring-slate-100 dark:bg-slate-500/20 dark:text-slate-400 dark:hover:bg-slate-500 dark:hover:text-white dark:focus:bg-slate-500 dark:focus:text-white dark:active:bg-slate-500 dark:active:text-white dark:ring-slate-400/20"
+              id="usersAction1"
+            >
+              <MoreHorizontal className="size-3" />
+            </Dropdown.Trigger>
+            <Dropdown.Content
+              placement={'bottom-start'}
+              className="absolute z-50 py-2 mt-1 ltr:text-left rtl:text-right list-none bg-white rounded-md shadow-md min-w-[10rem] dark:bg-zink-600"
+              aria-labelledby="usersAction1"
+            >
+              <li
+                className={`cursor-pointer block px-4 py-1.5 text-base transition-all duration-200 ease-linear text-slate-600 hover:bg-slate-100 hover:text-slate-500 focus:bg-slate-100 focus:text-slate-500 dark:text-zink-100 dark:hover:bg-zink-500 dark:hover:text-zink-200 dark:focus:bg-zink-500 dark:focus:text-zink-200`}
+                onClick={() => {
+                  setDeleteModalOpen(true);
+                  setUsecaseConfigData(cell?.row?.original);
+                }}
+              >
+                <Trash2 className="inline-block size-3 ltr:mr-1 rtl:ml-1" />
+                <span className="align-middle">Delete</span>
+              </li>
+            </Dropdown.Content>
+          </Dropdown>
+        ),
+      },
+    ],
+    []
+  );
+
+  const uploadUsecaseConfig = useUploadUsecaseConfig();
+  const hadleOnsubmit = async (formData: any) => {
+    try {
+      const res = await uploadUsecaseConfig.mutateAsync(formData);
+      if (res?.data?.status === 200) {
+        setUploadModalOpen(false);
+        toast.success(
+          `Success! Created: ${res?.data?.createdCount}, Updated: ${res?.data?.updatedCount}`
+        );
+      } else if (res?.data?.status === 400) {
+        toast.error(res?.data?.error);
+        setUploadModalOpen(false);
+      }
+    } catch (error) {
+      toast.error('File upload failed.');
+    }
+  };
+
+  const { data: allTemplateData } = useQuery({
+    queryKey: ['template-usecase-configs'],
+    queryFn: downloadTemplateUsecaseConfig,
+  });
+  const { data: templateData } = useQuery({
+    queryKey: ['template-usecase-config'],
+    queryFn: templateUsecaseConfig,
+  });
+
+  const handleDownload = async () => {
+    if (downloadModalOpen) {
+      const yamlData = yaml.dump(allTemplateData?.data);
+      const blob = new Blob([yamlData], { type: 'application/x-yaml' });
+      saveAs(blob, 'usecase_config.yaml');
+      setdownloadModalOpen(false);
+    }
+
+    if (downloadAllModalOpen) {
+      const yamlData = yaml.dump(templateData?.data);
+      const blob = new Blob([yamlData], { type: 'application/x-yaml' });
+      saveAs(blob, 'usecase_config.yaml');
+      setdownloadAllModalOpen(false);
+    }
+  };
+  const handleCancel = () => {
+    setdownloadModalOpen(false);
+    setdownloadAllModalOpen(false);
+  };
+
+  const deleteUsecaseConfig = useDeleteUsecaseConfig();
+  const handleDelete = () => {
+    deleteUsecaseConfig.mutate(usecaseConfigData?._id);
+    handleCloseModal();
+
+    if (deleteUsecaseConfig) {
+      toast.success('Usecase configuraion deleted successfully');
+    }
+  };
+  const handleCloseModal = () => {
+    setDeleteModalOpen(false);
+  };
+
+  return (
+    <div className="w-full">
+      <div className="w-full top-0 z-30  box  bg-top px-4">
+        <div className="grid grid-cols-1 border-b-[1px] border-[#80c2fe]   pt-4   ">
+          <div className="">
+            <h6 className="p-2 font-semi-bold text-black text-[32px] text-left">
+              Configure use-cases
+            </h6>
+          </div>
+          <div className=""></div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-x-5 xl:grid-cols-12 mx-4">
+        <div className="xl:col-span-12">
+          <div className="card">
+            <div className="card-body">
+              <div className="flex items-center">
+                <h6 className="text-15 grow">
+                  <div className="block">
+                    <h6 className="font-semibold text-[20px] text-black">
+                      {`Use-cases  (${existingUsecaseConfigs?.data?.data?.length})`}
+                    </h6>
+                    <p className="font-normal my-1 text-[14px] tracking-normal leading-5 text-[#cccccc] ">
+                      Manage existing usecase configurations
+                    </p>
+                  </div>
+                </h6>
+                <div className="shrink-0">
+                  <div>
+                    <button
+                      title="Click to download template"
+                      type="button"
+                      className="mx-3 text-white btn bg-custom-500 border-custom-500 hover:text-white hover:bg-custom-600 hover:border-custom-600 focus:text-white focus:bg-custom-600 focus:border-custom-600 focus:ring focus:ring-custom-100 active:text-white active:bg-custom-600 active:border-custom-600 active:ring active:ring-custom-100 dark:ring-custom-400/20"
+                      onClick={() => {
+                        setdownloadAllModalOpen(true);
+                      }}
+                    >
+                      <div className="flex items-center">
+                        <DownloadIcon
+                          className={`h-6 w-4 ${open ? '' : 'm-auto'}`}
+                        />
+                        <p className="ml-2">Download template</p>
+                      </div>
+                    </button>
+                    <button
+                      title="Click to download table"
+                      type="button"
+                      className="mx-3 text-white btn bg-custom-500 border-custom-500 hover:text-white hover:bg-custom-600 hover:border-custom-600 focus:text-white focus:bg-custom-600 focus:border-custom-600 focus:ring focus:ring-custom-100 active:text-white active:bg-custom-600 active:border-custom-600 active:ring active:ring-custom-100 dark:ring-custom-400/20"
+                      onClick={() => {
+                        setdownloadModalOpen(true);
+                      }}
+                    >
+                      <div className="flex items-center">
+                        <DownloadIcon
+                          className={`h-6 w-4 ${open ? '' : 'm-auto'}`}
+                        />
+                        <p className="pl-2">Download table</p>
+                      </div>
+                    </button>
+                    <button
+                      title="Click to upload template"
+                      type="button"
+                      className="mx-3 text-white btn bg-custom-500 border-custom-500 hover:text-white hover:bg-custom-600 hover:border-custom-600 focus:text-white focus:bg-custom-600 focus:border-custom-600 focus:ring focus:ring-custom-100 active:text-white active:bg-custom-600 active:border-custom-600 active:ring active:ring-custom-100 dark:ring-custom-400/20"
+                      onClick={() => {
+                        setUploadModalOpen(true);
+                      }}
+                    >
+                      <div className="flex items-center">
+                        <UploadIcon
+                          className={`h-6 w-4 ${open ? '' : 'm-auto'}`}
+                        />
+                        <p className="pl-2">Upload</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="!py-3.5 card-body border-y border-dashed border-slate-200 dark:border-zink-500">
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+                <div className="relative xl:col-span-2">
+                  <input
+                    type="text"
+                    className="px-8 search form-input border-slate-200 dark:border-zink-500 focus:outline-none focus:border-custom-500 disabled:bg-slate-100 dark:disabled:bg-zink-600 disabled:border-slate-300 dark:disabled:border-zink-500 dark:disabled:text-zink-200 disabled:text-slate-500 dark:text-zink-100 dark:bg-zink-700 dark:focus:border-custom-800 placeholder:text-slate-400 dark:placeholder:text-zink-200"
+                    placeholder="Search "
+                    autoComplete="off"
+                    autoFocus
+                    value={searchPh}
+                    onChange={(e: any) => setSearchPh(e?.target?.value)}
+                  />
+                  <Search className="mx-2 inline-block size-4 absolute ltr:left-2.5 rtl:right-2.5 top-2.5 text-slate-500 dark:text-zink-200 fill-slate-100 dark:fill-zink-600" />
+                </div>
+              </div>
+            </div>
+            <div className="card-body">
+              {existingUsecaseConfigs?.data?.data &&
+              existingUsecaseConfigs?.data?.data?.length > 0 ? (
+                <TableContainer
+                  isPagination={true}
+                  columns={columns || []}
+                  data={existingUsecaseConfigs?.data?.data ?? []}
+                  customPageSize={5}
+                  // isGlobalFilter={true}
+                  searchTerm={searchPh}
+                  divclassName="-mx-5 -mb-5 overflow-x-auto"
+                  tableclassName="w-full border-separate table-custom border-spacing-y-1 whitespace-nowrap"
+                  theadclassName="text-left relative rounded-md bg-slate-100 dark:bg-zink-600 after:absolute ltr:after:border-l-2 rtl:after:border-r-2 ltr:after:left-0 rtl:after:right-0 after:top-0 after:bottom-0 after:border-transparent [&.active]:after:border-custom-500 [&.active]:bg-slate-100 dark:[&.active]:bg-zink-600"
+                  thclassName="px-3.5 py-2.5 first:pl-5 last:pr-5 font-semibold"
+                  tdclassName="px-3.5 py-2.5 first:pl-5 last:pr-5"
+                  PaginationClassName="flex flex-col items-center mt-8 md:flex-row"
+                />
+              ) : (
+                <div className="noresult">
+                  <div className="py-6 text-center">
+                    <h5 className="mt-2 mb-1">Sorry! No Result Found</h5>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      {deleteModalOpen && (
+        <DeleteModal
+          show={deleteModalOpen}
+          onHide={handleCloseModal}
+          onDelete={handleDelete}
+          title="usecase config"
+        />
+      )}
+      {errorModalOpen && (
+        <ErrorTable
+          setErrorModalOpen={setErrorModalOpen}
+          errorResponseData={errorResponseData}
+        />
+      )}
+      {uploadModalOpen && (
+        <UploadFile
+          uploadModalOpen={uploadModalOpen}
+          setUploadModalOpen={setUploadModalOpen}
+          setErrorModalOpen={setErrorModalOpen}
+          setErrorResponseData={setErrorResponseData}
+          onSubmitHandler={hadleOnsubmit}
+        />
+      )}
+      {downloadModalOpen && (
+        <DownloadModal
+          downloadModalOpen={downloadModalOpen}
+          handleCancel={handleCancel}
+          handleDownload={handleDownload}
+          title="Are you sure you want to download table data"
+        />
+      )}
+      {downloadAllModalOpen && (
+        <DownloadModal
+          downloadModalOpen={downloadAllModalOpen}
+          handleCancel={handleCancel}
+          handleDownload={handleDownload}
+          title="Are you sure you want to download template"
+        />
+      )}
+    </div>
+  );
+};
+
+export default UsecaseConfig;

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ic-web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "NEXT_PUBLIC_USE_MOCK=true exec npx next dev --webpack --port $PORT"],
+      "port": 3004,
+      "autoPort": true
+    }
+  ]
+}
