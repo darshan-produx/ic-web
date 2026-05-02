@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { ToastContainer } from 'react-toastify';
 import { AuthenticationProvider } from '../common/authentication-provider';
 import { ReactQueryProvider } from '../common/react-query-provider';

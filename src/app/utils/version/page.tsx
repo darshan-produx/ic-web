@@ -1,5 +1,3 @@
-import { version } from '@ica/common';
-
 export default function Page() {
-  return <div>{`Version: ${version}"""`}</div>;
+  return <div>Version: 1.0.0</div>;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 
@@ -123,8 +123,25 @@ export const useFilterPersistence = ({
   });
 
   // ── Re-merge users / stakeholders when the API lists arrive ───
+  // Track the last *content* key we processed so we don't re-fire when the
+  // parent passes structurally identical but referentially new arrays (e.g.
+  // `users?.data?.data ?? []` creates a new [] on every render).
+  const lastListsKeyRef = useRef<string>('');
+
   useEffect(() => {
     if (!usersList?.length && !stakeholdersList?.length && !offeringsList?.length) return;
+
+    // Build a stable content key from IDs.  If the lists haven't actually
+    // changed, skip the setApplied call to break the infinite-loop cycle.
+    const newKey = [
+      (usersList ?? []).map((u: any) => u._id).join(','),
+      (stakeholdersList ?? []).map((s: any) => s._id).join(','),
+      (offeringsList ?? []).map((o: any) => o._id).join(','),
+      context,
+    ].join('|');
+
+    if (newKey === lastListsKeyRef.current) return;
+    lastListsKeyRef.current = newKey;
 
     setApplied((prev) => {
       let stored: string | null = null;
