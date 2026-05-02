@@ -7,7 +7,6 @@ import './global.css';
 import 'react-toastify/dist/ReactToastify.css';
 // import { matomoScript } from '../matomo/matomoScript';
 import LogoutListener from '../common/components/LogoutListener';
-import { Agentation } from 'agentation';
 // import Script from 'next/script';
 
 export const metadata = {
@@ -37,7 +36,6 @@ export default function RootLayout({
             {children}
             <ToastContainer />
             <LogoutListener />
-            {process.env.NODE_ENV === 'development' && <Agentation />}
           </AuthenticationProvider>
         </ReactQueryProvider>
       </body>
