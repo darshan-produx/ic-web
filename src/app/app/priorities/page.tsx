@@ -3,1220 +3,609 @@
 import { useQuery } from '@tanstack/react-query';
 import LandingSkeleton from './components/LandingSkeleton';
 import {
-  getAllChecklistItems,
-  getAllPriorityCustomerOverView,
   getAllPriorityTasks,
-  getEventsAndReferences,
-  getPriorityEmails,
   getPrioritySignalsAndOpportunites,
 } from '../../api/priorities/priorities';
 import { apiRequest } from '../../../common/api-request';
-import { HoverIcon } from '../../assests/icons/icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Tabs from './components/tabs';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-import { toast } from 'react-toastify';
-import TaskCard from '../tasks/taskCard';
-// import { getAllTasksStatus } from '../../api/tasks/tasks';
-// import { getUsers } from '../../api/users/users';
-import {
-  useCreateChecklistItem,
-  useDeleteChecklistItem,
-  useMoveChecklistItems,
-  useUpdateChecklistItem,
-} from '../../../services/mutations/prioritiesMutations';
-import PriorityEmails from './components/priorityEmails';
-
-import PriorityCustomers from './components/priorityCustomers';
-import References from './components/references';
-import CheckList from './components/checklist';
-import { getportfolioTeam } from '../../api/my-team/my-team';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { formatRevenue } from '../../../common/SupportFunctions';
-
-import { useMixpanel } from '../../../common/mixpanel/useMixpanel';
+import { getportfolioTeam } from '../../api/my-team/my-team';
 import { getMyTeamConfigs } from '../../api/customers/customers';
-import { Notes } from './components/priorityNotes';
-import { PrioritySignalCard } from './components/prioritySignalCard';
-import Link from 'next/link';
-export default function Priorities() {
-  dayjs.extend(relativeTime);
+import { PriorityFeedCard } from './components/PriorityFeedCard';
+import {
+  CheckSquare, Check, ArrowUpDown, AlertTriangle,
+  TrendingDown, TrendingUp, RefreshCw, Users, Zap, PlusCircle,
+} from 'lucide-react';
+import dayjs from 'dayjs';
 
-  const [referencesType, setReferencesType] = useState('all');
-  const [overviewType, setOverviewType] = useState('All');
-  const [checkListTitle, setCheckListTitle] = useState('');
-  const [addChecklist, setAddChecklist] = useState(false);
-  const [hoverId, setHoverId] = useState('');
-  const createCheklist = useCreateChecklistItem();
-  const updateChecklist = useUpdateChecklistItem();
-  const deleteChecklist = useDeleteChecklistItem();
-  const moveCheklistItem = useMoveChecklistItems();
-  const [visibleId, setVisibleId] = useState('');
-  const [pickDate, setPickDate] = useState(null);
-  const [titleErrorMes, setTitleErrorMsg] = useState('');
-  const [onHover, setOnHover] = useState('');
-  const [draggedItemData, setDraggedItemData] = useState<{
-    ref_type: string; // "task","insight","customer","stackholder_dob","stackholder_work_anniversary","add-hoc"
-    ref_id: string; // 54,null
-    title: string;
-    metadata: any;
-    customer_id?: number;
-  } | null>();
-  const [draggedChecklistItemData, setDraggedChecklistItemData] =
-    useState<any>();
-  const [dragOverItemData, setDragOverItemData] = useState<{
-    upper: number;
-    lower: number;
-  } | null>();
-  // const [checkListItemPosition, setCheckListItemPosition] = useState<{
-  //   upper: number;
-  //   lower: number;
-  // } | null>();
+// ─── Injected styles ──────────────────────────────────────────────────────────
+const INJECTED_STYLES = `
+@keyframes gradientDrift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animated-header-bg {
+  background: linear-gradient(-45deg,#FFF6F6,#FFF0F5,#F7F0FF,#F0F5FF,#FFF9F0,#FFF6F6);
+  background-size: 400% 400%;
+  animation: gradientDrift 18s ease infinite;
+}
+@keyframes icFloatUp {
+  0%   { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  55%  { opacity:1; transform:translate(-50%,calc(-50% - 48px)) scale(0.92); }
+  100% { opacity:0; transform:translate(-50%,calc(-50% - 90px)) scale(0.78); }
+}
+.ic-float-chip { animation: icFloatUp 0.8s cubic-bezier(0.22,0.61,0.36,1) forwards; }
+.sg-dash-border {
+  border: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%23C1C9D4' stroke-width='1.5' stroke-dasharray='12 7'/%3e%3c/svg%3e");
+}
+.sg-dash-border:hover {
+  background-image: none;
+}
+`;
 
-  const [checkListDate, setCheckListDate] = useState(
-    dayjs().format('YYYY-MM-DD')
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+function getBlobColors(): [string, string] {
+  const h = new Date().getHours();
+  if (h < 12) return ['rgba(251,146,60,0.20)','rgba(253,224,71,0.15)'];
+  if (h < 17) return ['rgba(99,102,241,0.16)','rgba(59,130,246,0.13)'];
+  return ['rgba(139,92,246,0.18)','rgba(236,72,153,0.13)'];
+}
+function formatINR(v: number | null | undefined): string | null {
+  if (!v) return null;
+  if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(1)}Cr`;
+  if (v >= 100_000)    return `₹${(v / 100_000).toFixed(1)}L`;
+  return `₹${v.toLocaleString('en-IN')}`;
+}
+
+// ─── Filters & sort ───────────────────────────────────────────────────────────
+const FEED_FILTERS = [
+  { key: 'all',              label: 'All' },
+  { key: 'at_risk',          label: 'At risk' },
+  { key: 'signal_pattern',   label: 'Patterns' },
+  { key: 'upcoming_renewal', label: 'Renewals' },
+  { key: 'relationship',     label: 'Relationships' },
+  { key: 'expansion',        label: 'Expansion' },
+] as const;
+const SORT_OPTIONS = [
+  { key: 'smart',     label: 'Smart' },
+  { key: 'arr',       label: 'ARR ↓' },
+  { key: 'newest',    label: 'Newest' },
+  { key: 'intensity', label: 'Intensity' },
+] as const;
+const IS = { urgent: 4, high: 3, medium: 2, low: 1 } as Record<string, number>;
+
+function applySortOrder(items: any[], sortBy: string): any[] {
+  const pinned = items.filter(i => i.is_pinned);
+  const rest   = [...items.filter(i => !i.is_pinned)];
+  const sorted = (() => {
+    if (sortBy === 'arr')       return rest.sort((a,b) => (b.value_at_stake??0) - (a.value_at_stake??0));
+    if (sortBy === 'newest')    return rest.sort((a,b) => new Date(b.signal_created_at??0).getTime() - new Date(a.signal_created_at??0).getTime());
+    if (sortBy === 'intensity') return rest.sort((a,b) => (IS[b.intensity]??0) - (IS[a.intensity]??0));
+    const sc = (i: any) => { let s=(IS[i.intensity]??1)*10; if(i.celebration_type) s+=55; if(i.value_at_stake) s+=Math.min(20,i.value_at_stake/2_500_000); return s; };
+    return rest.sort((a,b) => sc(b) - sc(a));
+  })();
+  return [...pinned, ...sorted];
+}
+
+// ─── Category config (for suggestion card) ───────────────────────────────────
+const CAT_CONFIG: Record<string, { label: string; color: string; bgLight: string; textColor: string; icon: React.ReactNode }> = {
+  at_risk:          { label:'At risk',      color:'#EF4444', bgLight:'#FEF2F2', textColor:'#DC2626', icon:<TrendingDown className="w-3 h-3"/> },
+  signal_pattern:   { label:'Pattern',      color:'#8B5CF6', bgLight:'#F5F3FF', textColor:'#7C3AED', icon:<Zap className="w-3 h-3"/> },
+  upcoming_renewal: { label:'Renewal',      color:'#F59E0B', bgLight:'#FFFBEB', textColor:'#D97706', icon:<RefreshCw className="w-3 h-3"/> },
+  relationship:     { label:'Relationship', color:'#10B981', bgLight:'#ECFDF5', textColor:'#059669', icon:<Users className="w-3 h-3"/> },
+  expansion:        { label:'Expansion',    color:'#3B82F6', bgLight:'#EFF6FF', textColor:'#2563EB', icon:<TrendingUp className="w-3 h-3"/> },
+};
+
+// ─── Task card ────────────────────────────────────────────────────────────────
+const AV_COLORS = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+const avColor  = (n: string) => AV_COLORS[(n??'').split('').reduce((a,c) => a+c.charCodeAt(0),0) % AV_COLORS.length];
+const initials = (n: string) => (n??'').split(' ').slice(0,2).map(w => w[0]?.toUpperCase()??'').join('');
+
+function TaskCard({ item, isNew }: { item: any; isNew?: boolean }) {
+  const [done, setDone] = useState(
+    ['Done','Completed','done','completed'].includes(item.status ?? '')
   );
-  const { trackEvent, MIXPANEL_EVENTS } = useMixpanel();
-  const {
-    data: getPriorityPortfolioTeamData,
-    isLoading: isPriorityPortfolioTeamDataLoading,
-  } = useQuery({
+
+  const rawDate   = item.planned_end_datetime ?? item.due_date ?? null;
+  const endDate   = rawDate ? dayjs(rawDate) : null;
+  const now       = dayjs();
+  const isOverdue = endDate && !done && endDate.isBefore(now);
+  const delayDays = isOverdue ? Math.max(1, now.diff(endDate, 'day')) : 0;
+  const wasLate   = done && endDate && endDate.isBefore(now);
+  const lateDays  = wasLate ? Math.max(1, now.diff(endDate, 'day')) : 0;
+  const assigneeName: string = item.assigned_to?.name ?? item.assigned_to?.first_name ?? item.customer_name ?? '';
+
+  return (
+    <div className={`bg-white rounded-xl transition-all duration-200
+      border ${isNew ? 'border-[#86EFAC]' : 'border-[#E4E7EC]'}
+      hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.07)]
+      hover:border-transparent px-5 py-4`}>
+      <div className="flex items-start gap-3.5">
+
+        {/* Circle checkbox */}
+        <button
+          onClick={() => setDone(d => !d)}
+          className="flex-shrink-0 mt-0.5 focus:outline-none group/cb"
+          title={done ? 'Mark as incomplete' : 'Mark as complete'}>
+          {done ? (
+            <div className="w-[22px] h-[22px] rounded-full bg-[#10B981] border-2 border-[#10B981] flex items-center justify-center transition-colors">
+              <Check className="w-3 h-3 text-white" strokeWidth={2.5} />
+            </div>
+          ) : (
+            <div className="w-[22px] h-[22px] rounded-full border-2 border-[#D1D5DB] group-hover/cb:border-[#9CA3AF] transition-colors" />
+          )}
+        </button>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className={`text-[15px] font-semibold leading-snug transition-colors ${done ? 'text-[#9CA3AF] line-through decoration-[#C4C9D0]' : 'text-[#1A2330]'}`}>
+              {item.title || '(No title)'}
+            </p>
+            {isNew && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#059669] flex-shrink-0">
+                <Check className="w-2.5 h-2.5" /> New
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center flex-wrap gap-0 mt-1.5">
+            {endDate && (
+              <span className="text-[13px] text-[#637083]">
+                {done ? `Completed on: ${endDate.format('MMM D')}` : `Ends ${endDate.format('MMM D')}`}
+              </span>
+            )}
+            {delayDays > 0 && !done && (
+              <span className="ml-2 text-[12px] font-medium bg-[#FEF9EC] text-[#B45309] px-2.5 py-0.5 rounded-full border border-[#FDE68A]">
+                {delayDays} day{delayDays > 1 ? 's' : ''} delay
+              </span>
+            )}
+            {wasLate && lateDays > 0 && (
+              <span className="ml-2 text-[12px] font-medium bg-[#FEF9EC] text-[#B45309] px-2.5 py-0.5 rounded-full border border-[#FDE68A]">
+                {lateDays} day{lateDays > 1 ? 's' : ''} late
+              </span>
+            )}
+            {assigneeName && (
+              <>
+                <span className="mx-2.5 text-[#D1D5DB] select-none">|</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0"
+                    style={{ background: avColor(assigneeName) }}>
+                    {initials(assigneeName)}
+                  </div>
+                  <span className="text-[13px] text-[#637083]">{assigneeName}</span>
+                </div>
+              </>
+            )}
+            {item.status && (
+              <>
+                <span className="mx-2.5 text-[#D1D5DB] select-none">|</span>
+                <span className="text-[13px] text-[#637083]">{item.status}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {isOverdue && !done && (
+          <AlertTriangle className="w-[17px] h-[17px] text-[#F59E0B] flex-shrink-0 mt-0.5 opacity-70" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Suggestion card — similar to feed card but visually distinct ─────────────
+interface SuggestionChip { id: string; top: number; left: number }
+
+function SuggestionCard({ item, onCreateTask, alreadyAdded }: {
+  item: any;
+  onCreateTask: (item: any) => void;
+  alreadyAdded: boolean;
+}) {
+  const [chips, setChips] = useState<SuggestionChip[]>([]);
+  const cat        = CAT_CONFIG[item.category] ?? CAT_CONFIG.signal_pattern;
+  const valueLabel = formatINR(item.value_at_stake);
+
+  const handleCreate = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (alreadyAdded) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const id = `sc_${Date.now()}`;
+    setChips(prev => [...prev, { id, top: r.top + r.height/2, left: r.left + r.width/2 }]);
+    setTimeout(() => setChips(prev => prev.filter(c => c.id !== id)), 850);
+    onCreateTask(item);
+  };
+
+  return (
+    <>
+      {chips.map(chip => (
+        <div key={chip.id}
+          className="ic-float-chip fixed pointer-events-none z-[9999] flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#059669] text-white text-[11px] font-bold shadow-lg"
+          style={{ top: chip.top, left: chip.left, transform: 'translate(-50%,-50%)' }}>
+          <Check className="w-3 h-3" /> Added to tasks
+        </div>
+      ))}
+
+      <div className={`rounded-2xl transition-all duration-200
+        hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_16px_36px_rgba(0,0,0,0.08)]
+        ${alreadyAdded
+          ? 'border border-[#A7F3D0] bg-[#F0FDF4]'
+          : 'bg-white sg-dash-border'
+        }`}>
+        <div className="px-6 pt-5 pb-5 flex flex-col gap-3">
+
+          {/* Row 1: name · category badge */}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[13px] font-semibold text-[#637083]">{item.customer_name}</p>
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-md whitespace-nowrap flex-shrink-0"
+              style={{ background: cat.bgLight, color: cat.textColor }}>
+              {cat.icon}{cat.label}
+            </span>
+          </div>
+
+          {/* Row 2: title */}
+          <p className="text-[15px] font-semibold text-[#1A2330] leading-snug -mt-1">
+            {item.title}
+          </p>
+
+          {/* Row 3: summary */}
+          {item.signal_summary && (
+            <p className="text-[13px] text-[#637083] leading-relaxed line-clamp-2">
+              {item.signal_summary}
+            </p>
+          )}
+
+          {/* Row 4: ARR + create task button */}
+          <div className="flex items-center justify-between gap-3 pt-0.5">
+            <div className="flex items-center gap-1.5">
+              {valueLabel && (
+                <span className="text-[12px] font-semibold text-[#344051] bg-white px-2.5 py-1 rounded-lg border border-[#E2E8F0] whitespace-nowrap">
+                  {valueLabel} ARR
+                </span>
+              )}
+              {(item.other_signals_count ?? 0) > 0 && (
+                <span className="text-[11px] text-[#637083] px-2 py-1 rounded-lg bg-white border border-[#E2E8F0] whitespace-nowrap">
+                  +{item.other_signals_count} signal{item.other_signals_count > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            <button
+              onClick={handleCreate}
+              disabled={alreadyAdded}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-semibold
+                transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                alreadyAdded
+                  ? 'bg-[#ECFDF5] text-[#059669] cursor-default'
+                  : 'bg-[#059669] text-white hover:bg-[#047857] shadow-sm shadow-green-200'
+              }`}>
+              {alreadyAdded
+                ? <><Check className="w-3.5 h-3.5" /> Added</>
+                : <><PlusCircle className="w-3.5 h-3.5" /> Create task</>
+              }
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function Priorities() {
+  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [view,         setView]         = useState<'feed' | 'tasks'>('feed');
+  const [sortBy,       setSortBy]       = useState<string>('smart');
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [pinnedIds,    setPinnedIds]    = useState<Set<string>>(new Set());
+  const [createdTasks, setCreatedTasks] = useState<any[]>([]);
+  const [addedIds,     setAddedIds]     = useState<Set<string>>(new Set());
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) setShowSortMenu(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  // ── Queries ──────────────────────────────────────────────────────────────────
+  const { data: portfolioData, isLoading: isPortfolioLoading } = useQuery({
     queryKey: ['getPriorityPortfolioTeamData'],
     queryFn: () => getportfolioTeam('year_to_date', true),
     refetchOnWindowFocus: false,
   });
-
-  const [tabName, setTabName] = useState('insights');
-
-  const { data: signalsAndOpportunities, isLoading: isSignalsAndOpportunitiesLoading } = useQuery({
+  const { data: signalsData, isLoading: isSignalsLoading } = useQuery({
     queryKey: ['prioritiesSignalsAndOpportunitiesData'],
     queryFn: () => getPrioritySignalsAndOpportunites(),
     refetchOnWindowFocus: false,
   });
-  const { data: emails } = useQuery({
-    queryKey: ['prioritiesEmailtData'],
-    queryFn: () => getPriorityEmails(),
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: priorityTasks } = useQuery({
+  const { data: tasksData } = useQuery({
     queryKey: ['prioritiesTaskstData'],
     queryFn: () => getAllPriorityTasks(),
     refetchOnWindowFocus: false,
   });
-
-  const { data: eventAndReferencesData, isLoading: isRefLoading } = useQuery({
-    queryKey: ['eventAndReferences'],
-    queryFn: () => getEventsAndReferences(),
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: PriorityCustomerOverView } = useQuery({
-    queryKey: ['PriorityCustomerOverView'],
-    queryFn: () => getAllPriorityCustomerOverView(),
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: checklistItems } = useQuery({
-    queryKey: ['checklistItems', checkListDate],
-    queryFn: () =>
-      getAllChecklistItems(dayjs(checkListDate).format('YYYY-MM-DD')),
-    refetchOnWindowFocus: false,
-  });
-
   const { data: userinfo } = useQuery({
     queryKey: ['userDetails'],
-    queryFn: () =>
-      apiRequest({
-        url: '/api/app-service/v1/userinfo?is_email_encrypt=true',
-      }),
+    queryFn: () => apiRequest({ url: '/api/app-service/v1/userinfo?is_email_encrypt=true' }),
   });
-
   const { data: myTeamConfigData } = useQuery({
     queryKey: ['myTeamConfigData'],
     queryFn: () => getMyTeamConfigs(),
     refetchOnWindowFocus: false,
   });
 
-  // const { data: statusArr } = useQuery({
-  //   queryKey: ['statusArr'],
-  //   queryFn: () => getAllTasksStatus(),
-  // });
-  // const { data: existingUsers } = useQuery({
-  //   queryKey: ['users'],
-  //   queryFn: getUsers,
-  // });
-
-  function getInitial(name: any) {
-    // Split the full name by spaces to get each part of the name
-    const nameParts = name?.trim().split(' ');
-    // Map through each part and get the first letter, then join them together
-    const initials = nameParts
-      ?.map((name: any) => name?.charAt(0).toUpperCase())
-      .join('');
-    return initials ? initials : 'NA';
-  }
-
-  const eventAndReferences = useMemo(() => {
-    if (referencesType == 'all') {
-      return eventAndReferencesData?.data?.data;
-    } else if (referencesType == 'news') {
-      return eventAndReferencesData?.data?.data?.filter(
-        (item: any) => item?.type == 'news'
-      );
-    } else {
-      return eventAndReferencesData?.data?.data?.filter(
-        (item: any) => item?.type !== 'news'
-      );
-    }
-  }, [referencesType, eventAndReferencesData?.data?.data]);
-
-  const customerOverview = useMemo(() => {
-    if (overviewType == 'All') {
-      return PriorityCustomerOverView?.data?.data;
-    } else if (overviewType == 'Yellow') {
-      return PriorityCustomerOverView?.data?.data.filter(
-        (item: any) => item?.overview_status === 'Yellow'
-      );
-    } else if (overviewType == 'Red') {
-      return PriorityCustomerOverView?.data?.data.filter(
-        (item: any) => item?.overview_status === 'Red'
-      );
-    } else if (overviewType == 'overdue') {
-      return PriorityCustomerOverView?.data?.data.filter(
-        (item: any) => item?.overdue === true
-      );
-    } else if (overviewType == 'near_renewal') {
-      return PriorityCustomerOverView?.data?.data.filter(
-        (item: any) => item?.near_to_renewal === true
-      );
-    }
-  }, [overviewType, PriorityCustomerOverView?.data?.data]);
+  // ── Portfolio ─────────────────────────────────────────────────────────────────
+  const node = portfolioData?.data?.data?.[0];
+  const sym  = node?.client_currency?.currency_symbol ?? '';
+  const cur  = node?.client_currency?.currency ?? '';
+  const agg  = node?.total_customer_details_aggregate ?? {};
 
   const myTeamConfig = useMemo(() => {
-    if (myTeamConfigData?.data) {
-      return myTeamConfigData?.data?.value;
-    } else {
-      return {
-        Accounts: { enabled: true, display_name: 'Accounts' },
-        ARR: { enabled: true, display_name: 'ARR' },
-        Renewals: { enabled: true, display_name: 'Renewals' },
-        Renewal_revenue: { enabled: true, display_name: 'Renewal revenue' },
-        NRR: { enabled: true, display_name: 'NRR' },
-        Expected_billing: { enabled: false, display_name: 'Expected billing' },
-        Actual_billed: { enabled: false, display_name: 'Actual billed' },
-        Unpaid: { enabled: false, display_name: 'Unpaid' },
-        Amount_overdue: { enabled: false, display_name: 'Amount overdue' },
-        Invoiced_ARR: { enabled: false, display_name: 'Invoiced ARR' },
-        Insights_acted: { enabled: true, display_name: 'Insights acted' },
-        Tasks_done: { enabled: true, display_name: 'Tasks done' },
-        opportunities: { enabled: true, display_name: 'Opportunities' },
-        value_of_opportunities: {
-          enabled: true,
-          display_name: 'Value of opportunities',
-        },
-        opportunities_win_count: {
-          enabled: false,
-          display_name: 'Opportunities win count',
-        },
-        opportunities_win_value: {
-          enabled: false,
-          display_name: 'Opportunities win value',
-        },
-        opportunities_lost_count: {
-          enabled: false,
-          display_name: 'Opportunities lost count',
-        },
-        opportunities_lost_value: {
-          enabled: false,
-          display_name: 'Opportunities lost value',
-        },
-      };
-    }
+    if (myTeamConfigData?.data) return myTeamConfigData?.data?.value;
+    return {
+      Accounts:       { enabled: true, display_name: 'Accounts' },
+      ARR:            { enabled: true, display_name: 'ARR' },
+      Renewals:       { enabled: true, display_name: 'Renewals' },
+      NRR:            { enabled: true, display_name: 'NRR' },
+      Insights_acted: { enabled: true, display_name: 'Insights acted' },
+      Tasks_done:     { enabled: true, display_name: 'Tasks done' },
+    };
   }, [myTeamConfigData?.data]);
 
-  const createCheklistItem = async () => {
-    if (!checkListTitle) {
-      // toast.error('Please enter checklist title');
-      setTitleErrorMsg('Please enter checklist title');
-      return;
-    }
-    try {
-      const payload = {
-        title: checkListTitle,
-        ref_type: 'add-hoc',
-        date: dayjs(checkListDate).format('YYYY-MM-DD'),
-        seq_num:
-          checklistItems?.data?.data?.length > 0
-            ? checklistItems?.data?.data[0]?.seq_num - 1
-            : 256,
-      };
-      const response = await createCheklist.mutateAsync(payload);
+  const metricItems = useMemo(() => {
+    const items: { label: string; value: string }[] = [];
+    if (myTeamConfig?.Accounts?.enabled)       items.push({ label: myTeamConfig.Accounts.display_name,       value: String(agg?.accounts ?? '–') });
+    if (myTeamConfig?.ARR?.enabled)            items.push({ label: myTeamConfig.ARR.display_name,            value: `${sym}${formatRevenue(agg?.arr, cur)}` });
+    if (myTeamConfig?.Renewals?.enabled)       items.push({ label: myTeamConfig.Renewals.display_name,       value: `${agg?.renewed_accounts_actual ?? '–'}/${agg?.renewed_accounts_opportunity ?? '–'}` });
+    if (myTeamConfig?.NRR?.enabled)            items.push({ label: myTeamConfig.NRR.display_name,            value: `${agg?.nrr ?? '–'}%` });
+    if (myTeamConfig?.Insights_acted?.enabled) items.push({ label: myTeamConfig.Insights_acted.display_name, value: `${agg?.insights_acted ?? '–'}/${agg?.customer_total_insights ?? '–'}` });
+    if (myTeamConfig?.Tasks_done?.enabled)     items.push({ label: myTeamConfig.Tasks_done.display_name,     value: `${agg?.tasks ?? '–'}/${agg?.customer_total_tasks ?? '–'}` });
+    return items;
+  }, [myTeamConfig, agg, sym, cur]);
 
-      if (response?.status == 200 || response?.status == 201) {
-        trackChecklistEvent(MIXPANEL_EVENTS.CREATE_CHECKLIST, payload);
-        setAddChecklist(false);
-        setCheckListTitle('');
-        // toast.success('Checklist item created successfully.');
-      } else {
-        toast.error(response?.data?.message || 'Failed to create checklist item');
-      }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || 'Failed to create checklist item');
-    }
-  };
+  // ── Feed ─────────────────────────────────────────────────────────────────────
+  const rawItems: any[] = useMemo(() => signalsData?.data?.data?.items ?? [], [signalsData?.data?.data?.items]);
 
-  const handleCheckList = async (item: any, moveType?: string) => {
-    try {
-      let upperItemSeqNum;
-      let lowerItemSeqNum;
-      if (!item?.is_completed) {
-        upperItemSeqNum =
-          checklistItems?.data?.data[checklistItems?.data?.data.length - 1]
-            ?.seq_num;
-      } else if (item?.is_completed) {
-        const upperPossiton = checklistItems?.data?.data?.filter(
-          (ele: any) => ele.is_completed == false
-        );
-        const lowerPossiton = checklistItems?.data?.data?.filter(
-          (ele: any) => ele.is_completed == true
-        );
-        lowerItemSeqNum = lowerPossiton[0]?.seq_num;
-        upperItemSeqNum =
-          checklistItems?.data?.data[upperPossiton?.length - 1]?.seq_num;
-      }
-      let payload;
-      if (moveType) {
-        payload = {
-          checklist_item_id: item?._id,
-          date:
-            moveType === 'next_day'
-              ? dayjs(item?.date).add(1, 'day').format('YYYY-MM-DD')
-              : moveType === 'day_after_next_day'
-                ? dayjs(item?.date).add(2, 'day').format('YYYY-MM-DD')
-                : '',
-        };
-      } else {
-        payload = {
-          is_completed: !item?.is_completed,
-          checklist_item_id: item?._id,
-          seq_num: calculateSeqNum(upperItemSeqNum, lowerItemSeqNum),
-        };
-      }
-      const response = await updateChecklist.mutateAsync(payload);
-      if (response?.status == 200 || response?.status == 201) {
-        trackChecklistEvent(MIXPANEL_EVENTS.UPDATE_CHECKLIST, payload);
-        toast.success('Checklist item updated successfully.');
-      } else {
-        toast.error(response?.data?.message || 'Failed to update checklist item');
-      }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || 'Failed to update checklist item');
-    }
+  const feedItems = useMemo(() => {
+    const items = rawItems
+      .filter((i: any) => !dismissedIds.has(i._id))
+      .map((i: any) => ({ ...i, is_pinned: i.is_pinned || pinnedIds.has(i._id) }));
+    return applySortOrder(items, sortBy);
+  }, [rawItems, dismissedIds, pinnedIds, sortBy]);
+
+  const filteredItems = useMemo(
+    () => activeFilter === 'all' ? feedItems : feedItems.filter((i: any) => i.category === activeFilter),
+    [feedItems, activeFilter]
+  );
+  const categoryCount = useMemo(() => {
+    const c: Record<string, number> = { all: feedItems.length };
+    feedItems.forEach((i: any) => { if (i.category) c[i.category] = (c[i.category] ?? 0) + 1; });
+    return c;
+  }, [feedItems]);
+
+  const taskList: any[]     = tasksData?.data?.data ?? [];
+  const totalTaskCount      = taskList.length + createdTasks.length;
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handlePin     = (id: string) =>
+    setPinnedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const handleDismiss = (id: string) =>
+    setDismissedIds(prev => new Set([...prev, id]));
+
+  const handleCreateTask = (item: any) => {
+    if (addedIds.has(item._id)) return;
+    setAddedIds(prev => new Set([...prev, item._id]));
+    const task = {
+      _id: `created_${item._id}`,
+      title: item.title,
+      customer_name: item.customer_name,
+      due_date: dayjs().add(3, 'day').toISOString(),
+      status: 'To Do',
+    };
+    setCreatedTasks(prev => [task, ...prev]);
   };
 
-  const handleMovechecklistItem = async (date?: any) => {
-    try {
-      const response = await moveCheklistItem.mutateAsync(date);
-      if (response?.status == 200 || response?.status == 201) {
-        toast.success('Checklist item moved successfully.');
-      } else {
-        toast.error(response?.data?.message || 'Failed to move checklist item');
-      }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || 'Failed to move checklist item');
-    }
-  };
-  const deleteChecklistItem = async (checklist_item_id: any) => {
-    try {
-      const response = await deleteChecklist.mutateAsync(checklist_item_id);
-      if (response?.status == 200 || response?.status == 201) {
-        // toast.success('Checklist item deleted successfully.');
-      } else {
-        toast.error(response?.data?.message || 'Failed to delete checklist item');
-      }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || 'Failed to delete checklist item');
-    }
-  };
-  function calculateSeqNum(upperItemSeqNum: any, lowerItemSeqNum: any) {
-    if (upperItemSeqNum && lowerItemSeqNum) {
-      return (upperItemSeqNum + lowerItemSeqNum) / 2; // Dropped between two items
-    } else if (!upperItemSeqNum && lowerItemSeqNum) {
-      return lowerItemSeqNum / 2; // Dropped at the beginning, allows fractional values
-    } else if (upperItemSeqNum && !lowerItemSeqNum) {
-      return upperItemSeqNum + 256; // Dropped at the end, addition upper seq_num by 256
-    } else {
-      if (checklistItems?.data?.data?.length > 0) {
-        return (
-          checklistItems?.data?.data[checklistItems?.data?.data?.length - 1]
-            ?.seq_num + 256
-        );
-      } else {
-        return 256;
-      }
-    }
+  if (isSignalsLoading) {
+    return (
+      <div className="animate-pulse h-[calc(100vh-64px)] overflow-hidden">
+        <LandingSkeleton />
+      </div>
+    );
   }
 
-  const drop = async (event: any) => {
-    try {
-      if (!draggedChecklistItemData?._id || draggedItemData?.title) {
-        const payload = {
-          title: draggedItemData?.title,
-          ref_id: draggedItemData?.ref_id,
-          ref_type: draggedItemData?.ref_type,
-          date: checkListDate,
-          seq_num: await calculateSeqNum(
-            dragOverItemData?.upper,
-            dragOverItemData?.lower
-          ),
-          metadata: draggedItemData?.metadata,
-          customer_id: draggedItemData?.customer_id,
-        };
-        const response = await createCheklist.mutateAsync(payload);
-        if (response?.status == 200 || response?.status == 201) {
-          trackChecklistEvent(MIXPANEL_EVENTS.CREATE_CHECKLIST, payload);
-          setDragOverItemData(null);
-          setDraggedItemData(null);
-          setAddChecklist(false);
-          setCheckListTitle('');
-          toast.success('Checklist item created successfully.');
-        } else {
-          toast.error(response?.data?.message || 'Failed to create checklist item');
-        }
-      } else {
-        const payload = {
-          checklist_item_id: draggedChecklistItemData._id,
-          seq_num: await calculateSeqNum(
-            dragOverItemData?.upper,
-            dragOverItemData?.lower
-          ),
-          // customer_id: draggedChecklistItemData?.customer_id,
-        };
-        const response = await updateChecklist.mutateAsync(payload);
-        if (response?.status == 200 || response?.status == 201) {
-          trackChecklistEvent(MIXPANEL_EVENTS.UPDATE_CHECKLIST, payload);
-          setDragOverItemData(null);
-          toast.success('Checklist item updated successfully.');
-        } else {
-          toast.error(response?.data?.message || 'Failed to update checklist item');
-        }
-      }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || 'Failed to process checklist item');
-      setDragOverItemData(null);
-      setDraggedItemData(null);
-    }
-  };
+  const firstName =
+    userinfo?.data?.first_name ??
+    (userinfo?.data?.name ? String(userinfo.data.name).split(' ')[0] : '') ?? '';
+  const greeting       = getGreeting();
+  const todayLabel     = dayjs().format('ddd, MMM D');
+  const [blobA, blobB] = getBlobColors();
+  const sortLabel      = SORT_OPTIONS.find(s => s.key === sortBy)?.label ?? 'Sort';
 
-  useEffect(() => {
-    const updatePickDate = async () => {
-      if (pickDate) {
-        const payload = {
-          checklist_item_id: visibleId,
-          date: dayjs(pickDate).format('YYYY-MM-DD'),
-        };
-
-        const response: any = await updateChecklist.mutateAsync(payload);
-        if (response?.status == 200 || response?.status == 201) {
-          toast.success('Checklist item Moved successfully.');
-        }
-        setPickDate(null);
-        setVisibleId('');
-      }
-    };
-
-    updatePickDate();
-  }, [pickDate]);
-
-  const setVisibleIdEmpty = useCallback(
-    (event: any) => {
-      const calendarElem =
-        document.getElementsByClassName('flatpickr-calendar')[0];
-      if (
-        !calendarElem?.contains(event.target) &&
-        !event.target.closest?.('.dropdown-menu')
-      ) {
-        setVisibleId('');
-      }
-    },
-    [setVisibleId]
-  );
-
-  useEffect(() => {
-    document.addEventListener('mousedown', setVisibleIdEmpty);
-    return () => {
-      document.removeEventListener('mousedown', setVisibleIdEmpty);
-    };
-  }, [setVisibleIdEmpty]);
-
-  const trackChecklistEvent = (event: any, payload: any) => {
-    trackEvent(event, {
-      title: payload?.title,
-      ref_type: payload?.ref_type,
-      ref_id: payload?.ref_id,
-      check_list_date: payload?.date,
-      seq_num: payload?.seq_num,
-      is_completed: payload?.is_completed,
-      checklist_item_id: payload?.checklist_item_id,
-      environment: process.env.NODE_ENV,
-      org_id: localStorage.getItem('org_id'),
-    });
-  };
   return (
-    <>
-      <div className="h-[calc(100vh-64px)] overflow-y-auto scroll">
-        {!isSignalsAndOpportunitiesLoading ? (
-          <div className=" w-[1200px] mx-auto h-fit">
-            <div
-              className="!w-[1200px] flex flex-row overflow-auto py-[40px] pr-[4px]"
-              style={{
-                scrollbarWidth: 'none',
-              }}
-            >
-              <div className="flex flex-row justify-between w-full">
-                <div className="min-w-[100px]  flex flex-row items-center gap-4">
-                  <div className="flex flex-col">
-                    <span className="text-[#637083] text-xs">Welcome</span>
-                    <span className="text-[#202B37] text-[20px] font-semibold mt-0.5">
-                      {userinfo?.data?.first_name}
-                    </span>
-                  </div>
+    <div className="h-[calc(100vh-64px)] overflow-y-auto bg-white">
+      <style dangerouslySetInnerHTML={{ __html: INJECTED_STYLES }} />
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="animated-header-bg relative overflow-hidden border-b border-[#EDE8ED]">
+        <div className="pointer-events-none absolute -top-24 -right-24 w-[340px] h-[340px] rounded-full"
+          style={{ background: `radial-gradient(circle,${blobA},transparent 70%)` }} />
+        <div className="pointer-events-none absolute -bottom-20 -left-20 w-[300px] h-[300px] rounded-full"
+          style={{ background: `radial-gradient(circle,${blobB},transparent 70%)` }} />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.025]"
+          style={{ backgroundImage: 'radial-gradient(#1A2330 1px,transparent 1px)', backgroundSize: '20px 20px' }} />
+
+        <div className="relative max-w-[800px] mx-auto px-8 pt-9 pb-7">
+          <p className="text-[11px] font-semibold text-[#B0A0A0] tracking-widest uppercase mb-1">{todayLabel}</p>
+          <h1 className="text-[30px] font-bold text-[#1A2330] leading-tight tracking-tight">
+            {greeting}
+            {firstName && (
+              <>{', '}<span style={{ background:'linear-gradient(135deg,#6366F1 0%,#3B82F6 55%,#06B6D4 100%)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>{firstName}</span></>
+            )}{'.'}
+          </h1>
+          {isPortfolioLoading ? (
+            <div className="flex items-center gap-8 mt-5">
+              {[72,60,56,52,68,60].map((w,i) => (
+                <div key={i} className="flex flex-col gap-2 animate-pulse">
+                  <div className="h-2.5 rounded-full bg-[#E8DADC]" style={{ width: w }} />
+                  <div className="h-4   rounded-full bg-[#E8DADC]" style={{ width: w-14 }} />
                 </div>
-
-                {!isPriorityPortfolioTeamDataLoading ? (
-                  <div className="justify-end gap-[50px] flex flex-row items-center">
-                    {myTeamConfig?.Accounts?.enabled && (
-                      <div className="flex flex-col">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Accounts?.display_name || 'Accounts'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.accounts
-                          }
-                        </span>
-                      </div>
-                    )}
-                    {myTeamConfig?.ARR?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.ARR?.display_name || 'ARR'}
-                        </span>
-
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.arr,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Renewals?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Renewals?.display_name || 'Renewals'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal ">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.renewed_accounts_actual
-                          }{' '}
-                          /{' '}
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.renewed_accounts_opportunity
-                          }
-                        </span>
-                      </div>
-                    )}
-                    {myTeamConfig?.Renewal_revenue?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Renewal_revenue?.display_name ||
-                            'Renewal revenue'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.actual_renewal_value,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}{' '}
-                          /{' '}
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.renewal_opportunity,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.NRR?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.NRR?.display_name || 'NRR'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.nrr
-                          }
-                          %
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Expected_billing?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Expected_billing?.display_name ||
-                            'Expected billing'}
-                        </span>
-
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.expected_billing,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Actual_billed?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Actual_billed?.display_name ||
-                            'Actual billed'}
-                        </span>
-
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.actual_billed,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Unpaid?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Unpaid?.display_name || 'Unpaid'}
-                        </span>
-
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.unpaid,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Amount_overdue?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Amount_overdue?.display_name ||
-                            'Amount overdue'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.total_amount_overdue,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Invoiced_ARR?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Invoiced_ARR?.display_name ||
-                            'Invoiced ARR'}
-                        </span>
-
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.invoiced_arr,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Insights_acted?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Insights_acted?.display_name ||
-                            'Insights acted'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.insights_acted
-                          }{' '}
-                          /{' '}
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.customer_total_insights
-                          }
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.Tasks_done?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.Tasks_done?.display_name ||
-                            'Tasks done'}
-                        </span>
-                        {/* <span className="text-[#202B37] text-[18px] font-normal">
-                            {
-                              getPriorityPortfolioTeamData?.data?.data[0]
-                                ?.total_customer_details_aggregate?.tasks
-                            }
-                          </span> */}
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.tasks
-                          }{' '}
-                          /{' '}
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.customer_total_tasks
-                          }
-                        </span>
-                      </div>
-                    )}
-                    {myTeamConfig?.opportunities?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.opportunities?.display_name ||
-                            'Opportunities'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate?.opportunities
-                          }
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.value_of_opportunities?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.value_of_opportunities
-                            ?.display_name || 'Value of opportunities'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.value_of_opportunities,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                          {/* {
-                              getPriorityPortfolioTeamData?.data?.data[0]
-                                ?.customer_details_aggregate
-                                ?.value_of_opportunities
-                            } */}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.opportunities_win_count?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.opportunities_win_count
-                            ?.display_name || 'Opportunities win count'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {getPriorityPortfolioTeamData?.data?.data[0]
-                            ?.total_customer_details_aggregate
-                            ?.opportunities_win_count ?? 0}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.opportunities_win_value?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.opportunities_win_value
-                            ?.display_name || 'Opportunities win value'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.opportunities_win_value,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                          {/* {getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.customer_details_aggregate
-                              ?.opportunities_win_value ?? 0} */}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.opportunities_lost_count?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.opportunities_lost_count
-                            ?.display_name || 'Opportunities lost count'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {getPriorityPortfolioTeamData?.data?.data[0]
-                            ?.total_customer_details_aggregate
-                            ?.opportunities_lost_count ?? 0}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {myTeamConfig?.opportunities_lost_value?.enabled && (
-                      <div className="flex flex-col ">
-                        <span className="text-[#637083] text-xs -mt-1">
-                          {myTeamConfig?.opportunities_lost_value
-                            ?.display_name || 'Opportunities lost value'}
-                        </span>
-                        <span className="text-[#202B37] text-[18px] font-normal">
-                          {
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency_symbol
-                          }
-                          {formatRevenue(
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.total_customer_details_aggregate
-                              ?.opportunities_lost_value,
-                            getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.client_currency?.currency
-                          )}
-                          {/* {getPriorityPortfolioTeamData?.data?.data[0]
-                              ?.customer_details_aggregate
-                              ?.opportunities_lost_value ?? 0} */}
-                        </span>
-                      </div>
-                    )}{' '}
-                    {(() => {
-                      const node =
-                        getPriorityPortfolioTeamData?.data?.data?.[0];
-                      if (!node) return null;
-
-                      const customAttrs =
-                        node.total_customer_details_aggregate?.custom_attributes ??
-                        {};
-                      // myTeamConfig from your useMemo
-                      return Object.entries(customAttrs)
-                        .filter(
-                          ([k]) =>
-                            !!myTeamConfig?.[k] && myTeamConfig[k].enabled
-                        ) // only enabled keys
-                        .map(([k, v]) => {
-                          // v can be a number (legacy) or an object { type, value, sum?, count? }
-                          const attrObj =
-                            typeof v === 'number'
-                              ? { value: v }
-                              : (v as any) || {};
-                          const displayName =
-                            myTeamConfig?.[k]?.display_name || k;
-
-                          // Prefer value, then sum (for sums), then count (for counts), else 0
-                          const rawValue =
-                            attrObj.value ??
-                            attrObj.sum ??
-                            attrObj.count ??
-                            0;
-
-                          // Format number for display
-                          const formatted =
-                            typeof rawValue === 'number'
-                              ? formatRevenue(rawValue)
-                              : String(rawValue);
-
-                          return (
-                            <div
-                              key={k}
-                              className="flex flex-col pr-[24px] last:pr-[0px]"
-                            >
-                              <span className="text-[#637083] text-xs -mt-1">
-                                {displayName}
-                              </span>
-                              <span className="text-[#202B37] text-[18px] font-normal">
-                                {formatted}
-                              </span>
-                            </div>
-                          );
-                        });
-                    })()}
-                  </div>
-                ) : (
-                  <div className="justify-end gap-[50px] w-[600px] flex flex-row items-center  ">
-                    {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                      <div
-                        key={i}
-                        className="flex w-[100px] flex-col gap-2 animate-pulse"
-                      // style={{ animationDuration: `${1 + i}sec` }}
-                      >
-                        <div className="bg-gray-200 h-[18px] w-[54px] rounded-md"></div>
-                        <div className="bg-gray-200 h-[18px] w-[88px] rounded-md"></div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              ))}
             </div>
-            <div className="flex h-[585px] h-lt-900:h-[440px] gap-[20px]">
-              <div className="flex flex-col gap-[16px] w-[750px]">
-                <div className="flex justify-between gap-[16px]">
-                  <Tabs
-                    tabName={tabName}
-                    setTabName={setTabName}
-                    insightCount={signalsAndOpportunities?.data?.data?.total_count || 0}
-                    emailCount={emails?.data?.total || 0}
-                    taskCount={priorityTasks?.data?.total || 0}
-                  />
+          ) : (
+            <div className="flex items-center gap-8 mt-5 overflow-x-auto" style={{ scrollbarWidth:'none' }}>
+              {metricItems.map(m => (
+                <div key={m.label} className="flex flex-col flex-shrink-0">
+                  <span className="text-[11px] font-semibold text-[#B0A0A0] uppercase tracking-wider">{m.label}</span>
+                  <span className="text-[18px] font-semibold text-[#1A2330] mt-0.5 tabular-nums">{m.value}</span>
                 </div>
-                <div className="border rounded-xl border-[#E4E7EC] bg-white h-[496px] h-lt-900:h-[364px] overflow-hidden scrollhide">
-                  {tabName === 'insights' ? (
-                    signalsAndOpportunities?.data?.data?.total_count !== 0 ? (
-                      <div>
-                        <div className="flex justify-between gap-[20px] p-[20px] text-[#97A1AF] text-xs border-b border-[#F2F4F7] ">
-                          <div className="pl-6 w-[138px] flex justify-start">
-                            Customer
-                          </div>
-                          <div className="flex-1">Insight </div>
-                          <div className="w-[110px] flex justify-start">
-                            Created
-                          </div>
-                        </div>
-                        <div className=" h-[439px] h-lt-900:h-[306px] overflow-y-auto overflow-x-hidden scroll">
-                          {signalsAndOpportunities?.data?.data?.items?.map((item: any) => (
-                            <>
-                              <Link
-                                href={`${item?.collection_type === 'signal'
-                                  ? `/app/customers/${item?.customer_id}?activeTab=open_issues`
-                                  : `/app/insights/opportunities?selected=${item?._id}`
-                                  }`}
-                                // target="" //in same tab
-                                rel="noopener noreferrer"
-                                className="block relative cursor-pointer"
-                                draggable={true}
-                                onDragStart={(e) => {
-                                  setDraggedItemData({
-                                    ref_type: item?.collection_type === 'signal' ? 'openissues' : 'opportunity',
-                                    ref_id: item?._id,
-                                    title: item?.collection_type === 'signal'
-                                      ? `Review  ${item?.customer_name}`
-                                      : item?.title ||
-                                      item?.insight_name,
-                                    customer_id: item?.customer_id,
-                                    metadata: null,
-                                  });
-                                }}
-                                onDragEnd={(e) => {
-                                  setDraggedItemData(null);
-                                }}
-                                onMouseEnter={() => setOnHover(item._id)}
-                                onMouseLeave={() => setOnHover('')}
-                              >
-                                <PrioritySignalCard
-                                  item={item}
-                                // setDraggedItemData={setDraggedItemData}
-                                />
-                                {onHover === item._id && (
-                                  <span className="absolute top-5 left-0 right-0 w-[40px]">
-                                    <HoverIcon />
-                                  </span>
-                                )}
-                              </Link>
-                            </>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-center items-center h-full text-[#97A1AF]">
-                        No priority signals and opportunities for your review
-                      </div>
-                    )
-                  ) : tabName === 'emails' ? (
-                    emails?.data?.total !== 0 ? (
-                      <div>
-                        <div className="flex  gap-[20px] p-[20px] text-[#97A1AF] text-xs border-b border-[#F2F4F7] ">
-                          <div className="w-full">Emails </div>
-                          <div className="w-[35px] pr-[21px]"> Time</div>
-                        </div>
-                        <div className="h-[439px] h-lt-900:h-[306px] overflow-y-auto scroll">
-                          {emails?.data?.data?.map((email: any) => (
-                            <PriorityEmails
-                              email={email}
-                              getInitials={getInitial}
-                              key={email?._id}
-                              setDraggedItemData={setDraggedItemData}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-center items-center h-full text-[#97A1AF]">
-                        No priority actions for your review
-                      </div>
-                    )
-                  ) : tabName === 'tasks' ? (
-                    priorityTasks?.data?.total !== 0 ? (
-                      <div>
-                        <div className="flex  gap-[20px] p-[20px] text-[#97A1AF] text-xs border-b border-[#F2F4F7] ">
-                          <div className="w-full">Task </div>
-                          <div className="w-[35px pr-[px]"> Scheduled</div>
-                        </div>
-                        <div className="h-[439px] h-lt-900:h-[306px] overflow-y-auto scroll">
-                          <div className=" ">
-                            {priorityTasks?.data?.data?.map((task: any) => (
-                              <div
-                                className="relative cursor-pointer border-b border-[#F2F4F7]"
-                                draggable={true}
-                                onDragStart={(e) => {
-                                  setDraggedItemData({
-                                    ref_type: 'task',
-                                    ref_id: task?._id,
-                                    title: task?.title,
-                                    metadata: {},
-                                    customer_id: task?.customer_id,
-                                  });
-                                }}
-                                onDragEnd={(e) => {
-                                  setDraggedItemData(null);
-                                }}
-                                onMouseEnter={() => setOnHover(task._id)}
-                                onMouseLeave={() => setOnHover('')}
-                              >
-                                <div className="mx-[20px]">
-                                  {' '}
-                                  <TaskCard
-                                    ele={task}
-                                    // taskStatus={statusArr?.data?.data}
-                                    // existingUsers={existingUsers?.data?.data}
-                                    priorityTask={true}
-                                  />
-                                </div>
-                                {onHover === task._id && (
-                                  <span className="absolute top-6 ">
-                                    <HoverIcon />
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-center items-center h-full text-[#97A1AF]">
-                        No priority actions for your review
-                      </div>
-                    )
-                  ) : tabName === 'notes' ? (
-                    <>
-                      <Notes
-                        userId={userinfo?.data?.id}
-                        content={userinfo?.data?.supervisor_note}
-                      />
-                    </>
-                  ) : null}
-                </div>
-              </div>
-              <div
-                className={`w-[430px] h-full flex flex-col justify-between bg-white border border-[#637083] shadow-lg hover:border-[#637083]  rounded-[10px]  `}
-              >
-                <CheckList
-                  setCheckListDate={setCheckListDate}
-                  checkListDate={checkListDate}
-                  drop={drop}
-                  checklistItems={checklistItems}
-                  handleMovechecklistItem={handleMovechecklistItem}
-                  addChecklist={addChecklist}
-                  setAddChecklist={setAddChecklist}
-                  checkListTitle={checkListTitle}
-                  setCheckListTitle={setCheckListTitle}
-                  createCheklistItem={createCheklistItem}
-                  setTitleErrorMsg={setTitleErrorMsg}
-                  titleErrorMes={titleErrorMes}
-                  setDraggedChecklistItemData={setDraggedChecklistItemData}
-                  setDragOverItemData={setDragOverItemData}
-                  handleCheckList={handleCheckList}
-                  setHoverId={setHoverId}
-                  hoverId={hoverId}
-                  deleteChecklistItem={deleteChecklistItem}
-                  visibleId={visibleId}
-                  setPickDate={setPickDate}
-                  setVisibleId={setVisibleId}
-                  onHover={onHover}
-                  setOnHover={setOnHover}
-                />
-              </div>
+              ))}
             </div>
-            <div className="flex mt-[40px] mb-[40px] h-[500px] overflow-hidden gap-[20px] rounded-lg">
-              <div className="w-[750px] border border-[#E4E7EC] rounded-xl overflow-hidden">
-                <div>
-                  <div className="flex p-[20px] border-b border-[#F2F4F7] gap-[12px]">
-                    <span
-                      className={
-                        overviewType === 'All'
-                          ? 'inline bg-[#3B82F6] px-[12px] py-[4px] text-white text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                          : 'inline bg-[#F2F4F7] px-[12px] py-[4px] text-[#344051] text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                      }
-                      onClick={() => setOverviewType('All')}
-                    >
-                      All
-                    </span>
-                    <span
-                      className={
-                        overviewType === 'Yellow'
-                          ? 'inline bg-[#3B82F6] px-[12px] py-[4px] text-white text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                          : 'inline bg-[#F2F4F7] px-[12px] py-[4px] text-[#344051] text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                      }
-                      onClick={() => setOverviewType('Yellow')}
-                    >
-                      Yellow (
-                      {PriorityCustomerOverView?.data?.overview_counts
-                        ?.status_yellow
-                        ? PriorityCustomerOverView?.data?.overview_counts
-                          ?.status_yellow
-                        : 0}
-                      )
-                    </span>
-                    <span
-                      className={
-                        overviewType === 'Red'
-                          ? 'inline bg-[#3B82F6] px-[12px] py-[4px] text-white text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                          : 'inline bg-[#F2F4F7] px-[12px] py-[4px] text-[#344051] text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                      }
-                      onClick={() => setOverviewType('Red')}
-                    >
-                      Red (
-                      {PriorityCustomerOverView?.data?.overview_counts
-                        ?.status_red
-                        ? PriorityCustomerOverView?.data?.overview_counts
-                          ?.status_red
-                        : 0}
-                      )
-                    </span>
-                    <span
-                      className={
-                        overviewType === 'near_renewal'
-                          ? 'inline bg-[#3B82F6] px-[12px] py-[4px] text-white text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                          : 'inline bg-[#F2F4F7] px-[12px] py-[4px] text-[#344051] text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                      }
-                      onClick={() => setOverviewType('near_renewal')}
-                    >
-                      Near renewal (
-                      {PriorityCustomerOverView?.data?.overview_counts
-                        ?.near_to_renewal
-                        ? PriorityCustomerOverView?.data?.overview_counts
-                          ?.near_to_renewal
-                        : 0}
-                      )
-                    </span>
-                    <span
-                      className={
-                        overviewType === 'overdue'
-                          ? 'inline bg-[#3B82F6] px-[12px] py-[4px] text-white text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                          : 'inline bg-[#F2F4F7] px-[12px] py-[4px] text-[#344051] text-[14px] !font-medium rounded-[150px] dark:bg-custom-500/20 dark:border-transparent cursor-pointer'
-                      }
-                      onClick={() => setOverviewType('overdue')}
-                    >
-                      Overdue (
-                      {PriorityCustomerOverView?.data?.overview_counts
-                        ?.overdue
-                        ? PriorityCustomerOverView?.data?.overview_counts
-                          ?.overdue
-                        : 0}
-                      )
-                    </span>
-                  </div>
-                  <div className=" border-[#E4E7EC]">
-                    <PriorityCustomers
-                      setDraggedItemData={setDraggedItemData}
-                      customerOverview={customerOverview}
-                      setOnHover={setOnHover}
-                      onHover={onHover}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div
-                className={`w-[430px] border border-[#E4E7EC] rounded-xl overflow-hidden ${isRefLoading ? 'animate-pulse' : ''
-                  }`}
-              >
-                <References
-                  referencesType={referencesType}
-                  setReferencesType={setReferencesType}
-                  eventAndReferences={eventAndReferences}
-                  setDraggedItemData={setDraggedItemData}
-                  getInitial={getInitial}
-                  setOnHover={setOnHover}
-                  onHover={onHover}
-                />
-              </div>
-            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-[#ECEEF1]">
+        <div className="max-w-[800px] mx-auto px-8 py-2.5 flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth:'none' }}>
+            {FEED_FILTERS.map(f => {
+              const count    = categoryCount[f.key] ?? 0;
+              const isActive = activeFilter === f.key && view === 'feed';
+              return (
+                <button key={f.key} onClick={() => { setActiveFilter(f.key); setView('feed'); }}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
+                    whitespace-nowrap flex-shrink-0 border transition-colors ${
+                    isActive
+                      ? 'bg-[#1A2330] border-[#1A2330] text-white'
+                      : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+                  }`}>
+                  {f.label}
+                  {count > 0 && <span className={`text-[11px] font-semibold ${isActive ? 'text-white/60' : 'text-[#97A1AF]'}`}>{count}</span>}
+                </button>
+              );
+            })}
           </div>
+
+          <div className="w-px h-5 bg-[#E4E7EC] flex-shrink-0" />
+
+          {/* Sort */}
+          <div className="relative flex-shrink-0" ref={sortMenuRef}>
+            <button onClick={() => setShowSortMenu(p => !p)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
+                border whitespace-nowrap transition-colors ${
+                showSortMenu ? 'bg-[#1A2330] border-[#1A2330] text-white' : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+              }`}>
+              <ArrowUpDown className="w-3 h-3" />{sortLabel}
+            </button>
+            {showSortMenu && (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl border border-[#E4E7EC] shadow-[0_4px_16px_rgba(0,0,0,0.10)] py-1 min-w-[130px]">
+                {SORT_OPTIONS.map(opt => (
+                  <button key={opt.key} onClick={() => { setSortBy(opt.key); setShowSortMenu(false); }}
+                    className={`w-full text-left px-4 py-2 text-[13px] hover:bg-[#F8F9FB] transition-colors ${sortBy === opt.key ? 'font-semibold text-[#1A2330]' : 'text-[#637083]'}`}>
+                    {opt.label}{sortBy === opt.key && <span className="float-right text-[#3B82F6]">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="w-px h-5 bg-[#E4E7EC] flex-shrink-0" />
+
+          {/* Tasks toggle */}
+          <button onClick={() => setView(v => v === 'tasks' ? 'feed' : 'tasks')}
+            className={`flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
+              flex-shrink-0 border transition-colors ${
+              view === 'tasks'
+                ? 'bg-[#1A2330] border-[#1A2330] text-white'
+                : totalTaskCount > 0
+                  ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#B45309] hover:bg-[#FEF3C7]'
+                  : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+            }`}>
+            <CheckSquare className="w-[13px] h-[13px]" />
+            Tasks
+            {totalTaskCount > 0 && (
+              <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
+                view === 'tasks' ? 'bg-white/20 text-white' : 'bg-[#F59E0B] text-white'
+              }`}>{totalTaskCount}</span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Content ─────────────────────────────────────────────────────── */}
+      <div className="max-w-[800px] mx-auto px-8 py-6">
+        {view === 'feed' ? (
+          filteredItems.length > 0 ? (
+            <div className="flex flex-col gap-5">
+              {filteredItems.map((item: any) => (
+                <PriorityFeedCard key={item._id} item={item}
+                  onPin={() => handlePin(item._id)}
+                  onDismiss={() => handleDismiss(item._id)}
+                  onCreateTask={handleCreateTask}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-24 gap-3">
+              <div className="w-12 h-12 rounded-full bg-[#F2F4F7] flex items-center justify-center text-xl">✓</div>
+              <p className="text-[14px] font-medium text-[#637083]">No items in this category</p>
+              <button onClick={() => setActiveFilter('all')} className="text-[13px] text-[#3B82F6] hover:underline">View all</button>
+            </div>
+          )
         ) : (
-          <div className="animate-pulse h-[cal(100vh-28rem)] overflow-hidden">
-            <LandingSkeleton />
+          /* ── Tasks view: two groups ──────────────────────────────────── */
+          <div className="flex flex-col gap-8">
+
+            {/* Group 1: Tasks */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">Tasks</span>
+                <span className="text-[11px] font-semibold text-[#97A1AF]">{createdTasks.length + taskList.length}</span>
+              </div>
+              {createdTasks.length === 0 && taskList.length === 0 ? (
+                <p className="text-[13px] text-[#97A1AF] px-1">No tasks yet — convert a suggestion below to get started.</p>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {createdTasks.map(task => <TaskCard key={task._id} item={task} isNew />)}
+                  {taskList.map((task: any) => <TaskCard key={task._id} item={task} />)}
+                </div>
+              )}
+            </section>
+
+            {/* Divider */}
+            <div className="h-px bg-[#F0F2F5]" />
+
+            {/* Group 2: Suggestions */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">Suggested actions</span>
+                <span className="text-[11px] font-semibold text-[#97A1AF]">{feedItems.length}</span>
+                <span className="text-[11px] text-[#97A1AF] ml-1">· click to convert any into a task</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                {feedItems.map((item: any) => (
+                  <SuggestionCard key={item._id} item={item}
+                    onCreateTask={handleCreateTask}
+                    alreadyAdded={addedIds.has(item._id)}
+                  />
+                ))}
+              </div>
+            </section>
+
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
