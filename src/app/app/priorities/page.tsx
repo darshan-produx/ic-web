@@ -448,10 +448,7 @@ export default function Priorities() {
         <div className="relative max-w-[800px] mx-auto px-8 pt-9 pb-7">
           <p className="text-[11px] font-semibold text-[#B0A0A0] tracking-widest uppercase mb-1">{todayLabel}</p>
           <h1 className="text-[30px] font-bold text-[#1A2330] leading-tight tracking-tight">
-            {greeting}
-            {firstName && (
-              <>{', '}<span style={{ background:'linear-gradient(135deg,#6366F1 0%,#3B82F6 55%,#06B6D4 100%)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>{firstName}</span></>
-            )}{'.'}
+            {greeting}{firstName && `, ${firstName}`}{'.'}
           </h1>
           {isPortfolioLoading ? (
             <div className="flex items-center gap-8 mt-5">
@@ -533,7 +530,7 @@ export default function Priorities() {
                   : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
             }`}>
             <CheckSquare className="w-[13px] h-[13px]" />
-            Tasks
+            ToDos
             {totalTaskCount > 0 && (
               <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
                 view === 'tasks' ? 'bg-white/20 text-white' : 'bg-[#F59E0B] text-white'
@@ -570,37 +567,17 @@ export default function Priorities() {
             {/* Group 1: Tasks */}
             <section>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">Tasks</span>
+                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">ToDos</span>
                 <span className="text-[11px] font-semibold text-[#97A1AF]">{createdTasks.length + taskList.length}</span>
               </div>
               {createdTasks.length === 0 && taskList.length === 0 ? (
-                <p className="text-[13px] text-[#97A1AF] px-1">No tasks yet — convert a suggestion below to get started.</p>
+                <p className="text-[13px] text-[#97A1AF] px-1">No ToDos yet.</p>
               ) : (
                 <div className="flex flex-col gap-2.5">
                   {createdTasks.map(task => <TaskCard key={task._id} item={task} isNew />)}
                   {taskList.map((task: any) => <TaskCard key={task._id} item={task} />)}
                 </div>
               )}
-            </section>
-
-            {/* Divider */}
-            <div className="h-px bg-[#F0F2F5]" />
-
-            {/* Group 2: Suggestions */}
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">Suggested actions</span>
-                <span className="text-[11px] font-semibold text-[#97A1AF]">{feedItems.length}</span>
-                <span className="text-[11px] text-[#97A1AF] ml-1">· click to convert any into a task</span>
-              </div>
-              <div className="flex flex-col gap-3">
-                {feedItems.map((item: any) => (
-                  <SuggestionCard key={item._id} item={item}
-                    onCreateTask={handleCreateTask}
-                    alreadyAdded={addedIds.has(item._id)}
-                  />
-                ))}
-              </div>
             </section>
 
           </div>

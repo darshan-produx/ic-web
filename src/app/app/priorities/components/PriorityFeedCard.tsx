@@ -344,7 +344,7 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask }: Prior
                 }`}>
                 {taskCreated
                   ? <><Check className="w-3 h-3" /> Added</>
-                  : <><PlusCircle className="w-3 h-3" /> Add task</>
+                  : <><PlusCircle className="w-3 h-3" /> + ToDo</>
                 }
               </button>
             </div>
