@@ -223,9 +223,10 @@ interface PriorityFeedCardProps {
   onPin?: () => void;
   onDismiss?: () => void;
   onCreateTask?: (item: any) => void;
+  onRemoveTask?: (item: any) => void;
 }
 
-export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask }: PriorityFeedCardProps) => {
+export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemoveTask }: PriorityFeedCardProps) => {
   const [taskCreated, setTaskCreated] = useState(false);
   const [chips, setChips]             = useState<Chip[]>([]);
 
@@ -237,7 +238,11 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask }: Prior
   const valueLabel = formatINR(item.value_at_stake);
 
   const handleCreateTask = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (taskCreated) return;
+    if (taskCreated) {
+      setTaskCreated(false);
+      onRemoveTask?.(item);
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     const id = `chip_${Date.now()}`;
     setChips(prev => [...prev, { id, top: r.top + r.height / 2, left: r.left + r.width / 2 }]);
@@ -269,7 +274,7 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask }: Prior
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <CustomerLogo name={item.customer_name} avatarBg={cat.avatarBg} />
-              <p className="text-[14px] font-semibold text-[#1A2330] leading-tight flex items-center gap-1.5">
+              <p className="text-[15px] font-normal text-[#1A2330] leading-tight flex items-center gap-1.5">
                 {item.customer_name}
                 {isCelebration && (item.celebration_type === 'birthday'
                   ? <Cake className="w-3.5 h-3.5 text-[#F59E0B]" />
@@ -335,16 +340,16 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask }: Prior
                 </Link>
               </div>
 
-              <button onClick={handleCreateTask} disabled={taskCreated}
+              <button onClick={handleCreateTask}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold
                   border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
                   taskCreated
-                    ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669] cursor-default'
+                    ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669] hover:bg-[#FEF2F2] hover:border-[#FCA5A5] hover:text-[#DC2626]'
                     : 'bg-white border-[#D1FAE5] text-[#059669] hover:bg-[#ECFDF5] hover:border-[#6EE7B7]'
                 }`}>
                 {taskCreated
                   ? <><Check className="w-3 h-3" /> Added</>
-                  : <><PlusCircle className="w-3 h-3" /> + ToDo</>
+                  : <><PlusCircle className="w-3 h-3" /> To Do</>
                 }
               </button>
             </div>

@@ -416,6 +416,11 @@ export default function Priorities() {
     setCreatedTasks(prev => [task, ...prev]);
   };
 
+  const handleRemoveTask = (item: any) => {
+    setAddedIds(prev => { const n = new Set(prev); n.delete(item._id); return n; });
+    setCreatedTasks(prev => prev.filter(t => t._id !== `created_${item._id}`));
+  };
+
   if (isSignalsLoading) {
     return (
       <div className="animate-pulse h-[calc(100vh-64px)] overflow-hidden">
@@ -530,7 +535,7 @@ export default function Priorities() {
                   : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
             }`}>
             <CheckSquare className="w-[13px] h-[13px]" />
-            ToDos
+            To Do
             {totalTaskCount > 0 && (
               <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
                 view === 'tasks' ? 'bg-white/20 text-white' : 'bg-[#F59E0B] text-white'
@@ -550,6 +555,7 @@ export default function Priorities() {
                   onPin={() => handlePin(item._id)}
                   onDismiss={() => handleDismiss(item._id)}
                   onCreateTask={handleCreateTask}
+                  onRemoveTask={handleRemoveTask}
                 />
               ))}
             </div>
@@ -567,11 +573,11 @@ export default function Priorities() {
             {/* Group 1: Tasks */}
             <section>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">ToDos</span>
+                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">To Do</span>
                 <span className="text-[11px] font-semibold text-[#97A1AF]">{createdTasks.length + taskList.length}</span>
               </div>
               {createdTasks.length === 0 && taskList.length === 0 ? (
-                <p className="text-[13px] text-[#97A1AF] px-1">No ToDos yet.</p>
+                <p className="text-[13px] text-[#97A1AF] px-1">Nothing to do yet.</p>
               ) : (
                 <div className="flex flex-col gap-2.5">
                   {createdTasks.map(task => <TaskCard key={task._id} item={task} isNew />)}
