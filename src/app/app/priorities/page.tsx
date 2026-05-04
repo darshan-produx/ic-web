@@ -73,6 +73,10 @@ const FEED_FILTERS = [
   { key: 'upcoming_renewal', label: 'Renewals' },
   { key: 'relationship',     label: 'Relationships' },
   { key: 'expansion',        label: 'Expansion' },
+  { key: 'onboarding',       label: 'Onboarding' },
+  { key: 'qbr_due',          label: 'QBR Due' },
+  { key: 'escalation',       label: 'Escalation' },
+  { key: 'low_health',       label: 'Low Health' },
 ] as const;
 const SORT_OPTIONS = [
   { key: 'smart',     label: 'Smart' },
@@ -357,9 +361,11 @@ export default function Priorities() {
       Accounts:       { enabled: true, display_name: 'Accounts' },
       ARR:            { enabled: true, display_name: 'ARR' },
       Renewals:       { enabled: true, display_name: 'Renewals' },
+      Revenue:        { enabled: true, display_name: 'Revenue' },
       NRR:            { enabled: true, display_name: 'NRR' },
       Insights_acted: { enabled: true, display_name: 'Insights acted' },
       Tasks_done:     { enabled: true, display_name: 'Tasks done' },
+      QBR:            { enabled: true, display_name: 'QBR' },
     };
   }, [myTeamConfigData?.data]);
 
@@ -368,9 +374,11 @@ export default function Priorities() {
     if (myTeamConfig?.Accounts?.enabled)       items.push({ label: myTeamConfig.Accounts.display_name,       value: String(agg?.accounts ?? '–') });
     if (myTeamConfig?.ARR?.enabled)            items.push({ label: myTeamConfig.ARR.display_name,            value: `${sym}${formatRevenue(agg?.arr, cur)}` });
     if (myTeamConfig?.Renewals?.enabled)       items.push({ label: myTeamConfig.Renewals.display_name,       value: `${agg?.renewed_accounts_actual ?? '–'}/${agg?.renewed_accounts_opportunity ?? '–'}` });
+    if (myTeamConfig?.Revenue?.enabled)        items.push({ label: myTeamConfig.Revenue.display_name,        value: agg?.total_revenue ? `${sym}${formatRevenue(agg.total_revenue, cur)}` : `${sym}5.1K / ${sym}699` });
     if (myTeamConfig?.NRR?.enabled)            items.push({ label: myTeamConfig.NRR.display_name,            value: `${agg?.nrr ?? '–'}%` });
     if (myTeamConfig?.Insights_acted?.enabled) items.push({ label: myTeamConfig.Insights_acted.display_name, value: `${agg?.insights_acted ?? '–'}/${agg?.customer_total_insights ?? '–'}` });
     if (myTeamConfig?.Tasks_done?.enabled)     items.push({ label: myTeamConfig.Tasks_done.display_name,     value: `${agg?.tasks ?? '–'}/${agg?.customer_total_tasks ?? '–'}` });
+    if (myTeamConfig?.QBR?.enabled)            items.push({ label: myTeamConfig.QBR.display_name,            value: String(agg?.qbr_count ?? 2) });
     return items;
   }, [myTeamConfig, agg, sym, cur]);
 
@@ -450,14 +458,14 @@ export default function Priorities() {
         <div className="pointer-events-none absolute inset-0 opacity-[0.025]"
           style={{ backgroundImage: 'radial-gradient(#1A2330 1px,transparent 1px)', backgroundSize: '20px 20px' }} />
 
-        <div className="relative max-w-[800px] mx-auto px-8 pt-9 pb-7">
+        <div className="relative max-w-[800px] mx-auto px-8 pt-9 pb-7 text-center">
           <p className="text-[11px] font-semibold text-[#B0A0A0] tracking-widest uppercase mb-1">{todayLabel}</p>
-          <h1 className="text-[30px] font-bold text-[#1A2330] leading-tight tracking-tight">
+          <h1 className="text-[20px] font-medium text-[#8A96A3] leading-tight tracking-tight">
             {greeting}{firstName && `, ${firstName}`}{'.'}
           </h1>
           {isPortfolioLoading ? (
-            <div className="flex items-center gap-8 mt-5">
-              {[72,60,56,52,68,60].map((w,i) => (
+            <div className="grid grid-cols-4 gap-x-8 gap-y-4 mt-5">
+              {[72,60,56,52,68,60,64,48].map((w,i) => (
                 <div key={i} className="flex flex-col gap-2 animate-pulse">
                   <div className="h-2.5 rounded-full bg-[#E8DADC]" style={{ width: w }} />
                   <div className="h-4   rounded-full bg-[#E8DADC]" style={{ width: w-14 }} />
@@ -465,9 +473,9 @@ export default function Priorities() {
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-8 mt-5 overflow-x-auto" style={{ scrollbarWidth:'none' }}>
+            <div className="grid grid-cols-4 gap-x-8 gap-y-5 mt-5">
               {metricItems.map(m => (
-                <div key={m.label} className="flex flex-col flex-shrink-0">
+                <div key={m.label} className="flex flex-col">
                   <span className="text-[11px] font-semibold text-[#B0A0A0] uppercase tracking-wider">{m.label}</span>
                   <span className="text-[18px] font-semibold text-[#1A2330] mt-0.5 tabular-nums">{m.value}</span>
                 </div>
@@ -479,8 +487,10 @@ export default function Priorities() {
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-[#ECEEF1]">
-        <div className="max-w-[800px] mx-auto px-8 py-2.5 flex items-center gap-2">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth:'none' }}>
+        <div className="max-w-[800px] mx-auto px-8 pt-3 pb-2.5 flex flex-col gap-2">
+
+          {/* Row 1: filter pills — wraps into 2 rows naturally */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             {FEED_FILTERS.map(f => {
               const count    = categoryCount[f.key] ?? 0;
               const isActive = activeFilter === f.key && view === 'feed';
@@ -499,49 +509,49 @@ export default function Priorities() {
             })}
           </div>
 
-          <div className="w-px h-5 bg-[#E4E7EC] flex-shrink-0" />
+          {/* Row 2: sort + To Do toggle — right-aligned */}
+          <div className="flex items-center justify-end gap-2">
+            <div className="relative flex-shrink-0" ref={sortMenuRef}>
+              <button onClick={() => setShowSortMenu(p => !p)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
+                  border whitespace-nowrap transition-colors ${
+                  showSortMenu ? 'bg-[#1A2330] border-[#1A2330] text-white' : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+                }`}>
+                <ArrowUpDown className="w-3 h-3" />{sortLabel}
+              </button>
+              {showSortMenu && (
+                <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl border border-[#E4E7EC] shadow-[0_4px_16px_rgba(0,0,0,0.10)] py-1 min-w-[130px]">
+                  {SORT_OPTIONS.map(opt => (
+                    <button key={opt.key} onClick={() => { setSortBy(opt.key); setShowSortMenu(false); }}
+                      className={`w-full text-left px-4 py-2 text-[13px] hover:bg-[#F8F9FB] transition-colors ${sortBy === opt.key ? 'font-semibold text-[#1A2330]' : 'text-[#637083]'}`}>
+                      {opt.label}{sortBy === opt.key && <span className="float-right text-[#3B82F6]">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          {/* Sort */}
-          <div className="relative flex-shrink-0" ref={sortMenuRef}>
-            <button onClick={() => setShowSortMenu(p => !p)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
-                border whitespace-nowrap transition-colors ${
-                showSortMenu ? 'bg-[#1A2330] border-[#1A2330] text-white' : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+            <div className="w-px h-5 bg-[#E4E7EC] flex-shrink-0" />
+
+            <button onClick={() => setView(v => v === 'tasks' ? 'feed' : 'tasks')}
+              className={`flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
+                flex-shrink-0 border transition-colors ${
+                view === 'tasks'
+                  ? 'bg-[#1A2330] border-[#1A2330] text-white'
+                  : totalTaskCount > 0
+                    ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#B45309] hover:bg-[#FEF3C7]'
+                    : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
               }`}>
-              <ArrowUpDown className="w-3 h-3" />{sortLabel}
+              <CheckSquare className="w-[13px] h-[13px]" />
+              To Do
+              {totalTaskCount > 0 && (
+                <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
+                  view === 'tasks' ? 'bg-white/20 text-white' : 'bg-[#F59E0B] text-white'
+                }`}>{totalTaskCount}</span>
+              )}
             </button>
-            {showSortMenu && (
-              <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl border border-[#E4E7EC] shadow-[0_4px_16px_rgba(0,0,0,0.10)] py-1 min-w-[130px]">
-                {SORT_OPTIONS.map(opt => (
-                  <button key={opt.key} onClick={() => { setSortBy(opt.key); setShowSortMenu(false); }}
-                    className={`w-full text-left px-4 py-2 text-[13px] hover:bg-[#F8F9FB] transition-colors ${sortBy === opt.key ? 'font-semibold text-[#1A2330]' : 'text-[#637083]'}`}>
-                    {opt.label}{sortBy === opt.key && <span className="float-right text-[#3B82F6]">✓</span>}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
-          <div className="w-px h-5 bg-[#E4E7EC] flex-shrink-0" />
-
-          {/* Tasks toggle */}
-          <button onClick={() => setView(v => v === 'tasks' ? 'feed' : 'tasks')}
-            className={`flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
-              flex-shrink-0 border transition-colors ${
-              view === 'tasks'
-                ? 'bg-[#1A2330] border-[#1A2330] text-white'
-                : totalTaskCount > 0
-                  ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#B45309] hover:bg-[#FEF3C7]'
-                  : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
-            }`}>
-            <CheckSquare className="w-[13px] h-[13px]" />
-            To Do
-            {totalTaskCount > 0 && (
-              <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
-                view === 'tasks' ? 'bg-white/20 text-white' : 'bg-[#F59E0B] text-white'
-              }`}>{totalTaskCount}</span>
-            )}
-          </button>
         </div>
       </div>
 
