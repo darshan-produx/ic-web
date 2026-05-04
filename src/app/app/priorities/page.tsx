@@ -356,7 +356,7 @@ export default function Priorities() {
   const agg  = node?.total_customer_details_aggregate ?? {};
 
   const myTeamConfig = useMemo(() => {
-    if (myTeamConfigData?.data) return myTeamConfigData?.data?.value;
+    if (myTeamConfigData?.data?.value) return myTeamConfigData.data.value;
     return {
       Accounts:       { enabled: true, display_name: 'Accounts' },
       ARR:            { enabled: true, display_name: 'ARR' },
