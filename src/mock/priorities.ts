@@ -979,11 +979,14 @@ export const mockChecklistItems = [
 
 // My Team / Metric Config
 export const mockMyTeamConfig = {
-  show_health_score: true,
-  show_arr: true,
-  show_nps: true,
-  show_renewal_date: true,
-  currency_symbol: '₹',
+  Accounts:       { enabled: true, display_name: 'Accounts' },
+  ARR:            { enabled: true, display_name: 'ARR' },
+  Renewals:       { enabled: true, display_name: 'Renewals' },
+  Revenue:        { enabled: true, display_name: 'Revenue' },
+  NRR:            { enabled: true, display_name: 'NRR' },
+  Insights_acted: { enabled: true, display_name: 'Insights acted' },
+  Tasks_done:     { enabled: true, display_name: 'Tasks done' },
+  QBR:            { enabled: true, display_name: 'QBR' },
 };
 
 export const mockCustomer360MetricConfig = {
