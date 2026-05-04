@@ -485,52 +485,69 @@ export default function Priorities() {
         </div>
       </div>
 
-      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-[#ECEEF1]">
-        <div className="max-w-[800px] mx-auto px-8 py-3 flex items-start gap-3">
+      {/* ── Page-level tabs ──────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
 
-          {/* Pills — grow + wrap on the left */}
-          <div className="flex-1 flex items-center gap-1.5 flex-wrap">
-            {FEED_FILTERS.map(f => {
-              const count    = categoryCount[f.key] ?? 0;
-              const isActive = activeFilter === f.key && view === 'feed';
-              return (
-                <button key={f.key} onClick={() => { setActiveFilter(f.key); setView('feed'); }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
-                    whitespace-nowrap flex-shrink-0 border transition-colors ${
-                    isActive
-                      ? 'bg-[#1A2330] border-[#1A2330] text-white'
-                      : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
-                  }`}>
-                  {f.label}
-                  {count > 0 && <span className={`text-[10px] font-semibold ${isActive ? 'text-white/60' : 'text-[#97A1AF]'}`}>{count}</span>}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Actionables toggle — pinned top-right */}
-          <div className="flex-shrink-0 pt-[1px]">
-            <button onClick={() => setView(v => v === 'tasks' ? 'feed' : 'tasks')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
-                border whitespace-nowrap transition-colors ${
-                view === 'tasks'
-                  ? 'bg-[#1A2330] border-[#1A2330] text-white'
-                  : totalTaskCount > 0
-                    ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#B45309] hover:bg-[#FEF3C7]'
-                    : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+        {/* Tab row */}
+        <div className="max-w-[800px] mx-auto px-8">
+          <div className="flex items-end gap-0">
+            <button
+              onClick={() => setView('feed')}
+              className={`relative flex items-center gap-2 px-1 pb-3 pt-3.5 mr-7 text-[14px] font-semibold transition-colors ${
+                view === 'feed' ? 'text-[#1A2330]' : 'text-[#97A1AF] hover:text-[#637083]'
               }`}>
-              <CheckSquare className="w-3 h-3" />
+              Feed
+              <span className={`text-[11px] font-semibold tabular-nums ${view === 'feed' ? 'text-[#97A1AF]' : 'text-[#C1C9D4]'}`}>
+                {feedItems.length}
+              </span>
+              {view === 'feed' && <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-[#1A2330]" />}
+            </button>
+
+            <button
+              onClick={() => setView('tasks')}
+              className={`relative flex items-center gap-2 px-1 pb-3 pt-3.5 text-[14px] font-semibold transition-colors ${
+                view === 'tasks' ? 'text-[#1A2330]' : 'text-[#97A1AF] hover:text-[#637083]'
+              }`}>
               Actionables
               {totalTaskCount > 0 && (
-                <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
-                  view === 'tasks' ? 'bg-white/20 text-white' : 'bg-[#F59E0B] text-white'
+                <span className={`text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center leading-none ${
+                  view === 'tasks' ? 'bg-[#1A2330] text-white' : 'bg-[#F59E0B] text-white'
                 }`}>{totalTaskCount}</span>
               )}
+              {view === 'tasks' && <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-[#1A2330]" />}
             </button>
           </div>
-
         </div>
+
+        {/* Filter pills — only in Feed view */}
+        {view === 'feed' && (
+          <div className="border-t border-[#ECEEF1]">
+            <div className="max-w-[800px] mx-auto px-8 py-2.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {FEED_FILTERS.map(f => {
+                  const count    = categoryCount[f.key] ?? 0;
+                  const isActive = activeFilter === f.key;
+                  return (
+                    <button key={f.key} onClick={() => setActiveFilter(f.key)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
+                        whitespace-nowrap flex-shrink-0 border transition-colors ${
+                        isActive
+                          ? 'bg-[#1A2330] border-[#1A2330] text-white'
+                          : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+                      }`}>
+                      {f.label}
+                      {count > 0 && <span className={`text-[10px] font-semibold ${isActive ? 'text-white/60' : 'text-[#97A1AF]'}`}>{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bottom border when Actionables view (no pills row) */}
+        {view === 'tasks' && <div className="border-t border-[#ECEEF1]" />}
+
       </div>
 
       {/* ── Content ─────────────────────────────────────────────────────── */}
