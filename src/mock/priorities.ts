@@ -932,16 +932,27 @@ export const mockPrioritySignals = [
 ];
 
 // Portfolio Team Summary (for priorities header)
-export const mockPortfolioTeam = {
-  total_customers: 8,
-  healthy: 5,
-  at_risk: 2,
-  churn_risk: 2,
-  total_arr: 216800000,
-  tasks_due_today: 2,
-  open_insights: 4,
-  avg_health_score: 77.6,
-};
+export const mockPortfolioTeam = [
+  {
+    client_currency: {
+      currency_symbol: '₹',
+      currency: 'INR',
+    },
+    total_customer_details_aggregate: {
+      accounts: 34,
+      arr: 325000000,
+      renewed_accounts_actual: 55,
+      renewed_accounts_opportunity: 73,
+      total_revenue: 51000000,
+      nrr: 98.3,
+      insights_acted: 34,
+      customer_total_insights: 211,
+      tasks: 34,
+      customer_total_tasks: 211,
+      qbr_count: 2,
+    },
+  },
+];
 
 // Checklist items for today
 export const mockChecklistItems = [

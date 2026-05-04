@@ -487,33 +487,33 @@ export default function Priorities() {
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-[#ECEEF1]">
-        <div className="max-w-[800px] mx-auto px-8 pt-3 pb-2.5 flex flex-col gap-2">
+        <div className="max-w-[800px] mx-auto px-8 py-3 flex items-start gap-3">
 
-          {/* Row 1: filter pills — wraps into 2 rows naturally */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Pills — grow + wrap on the left */}
+          <div className="flex-1 flex items-center gap-1.5 flex-wrap">
             {FEED_FILTERS.map(f => {
               const count    = categoryCount[f.key] ?? 0;
               const isActive = activeFilter === f.key && view === 'feed';
               return (
                 <button key={f.key} onClick={() => { setActiveFilter(f.key); setView('feed'); }}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
                     whitespace-nowrap flex-shrink-0 border transition-colors ${
                     isActive
                       ? 'bg-[#1A2330] border-[#1A2330] text-white'
                       : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
                   }`}>
                   {f.label}
-                  {count > 0 && <span className={`text-[11px] font-semibold ${isActive ? 'text-white/60' : 'text-[#97A1AF]'}`}>{count}</span>}
+                  {count > 0 && <span className={`text-[10px] font-semibold ${isActive ? 'text-white/60' : 'text-[#97A1AF]'}`}>{count}</span>}
                 </button>
               );
             })}
           </div>
 
-          {/* Row 2: sort + To Do toggle — right-aligned */}
-          <div className="flex items-center justify-end gap-2">
-            <div className="relative flex-shrink-0" ref={sortMenuRef}>
+          {/* Controls — pinned to top-right, never wrap */}
+          <div className="flex items-center gap-2 flex-shrink-0 pt-[1px]">
+            <div className="relative" ref={sortMenuRef}>
               <button onClick={() => setShowSortMenu(p => !p)}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
                   border whitespace-nowrap transition-colors ${
                   showSortMenu ? 'bg-[#1A2330] border-[#1A2330] text-white' : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
                 }`}>
@@ -531,18 +531,18 @@ export default function Priorities() {
               )}
             </div>
 
-            <div className="w-px h-5 bg-[#E4E7EC] flex-shrink-0" />
+            <div className="w-px h-5 bg-[#E4E7EC]" />
 
             <button onClick={() => setView(v => v === 'tasks' ? 'feed' : 'tasks')}
-              className={`flex items-center gap-1.5 px-3.5 py-[6px] rounded-full text-[13px] font-medium
-                flex-shrink-0 border transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
+                border whitespace-nowrap transition-colors ${
                 view === 'tasks'
                   ? 'bg-[#1A2330] border-[#1A2330] text-white'
                   : totalTaskCount > 0
                     ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#B45309] hover:bg-[#FEF3C7]'
                     : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
               }`}>
-              <CheckSquare className="w-[13px] h-[13px]" />
+              <CheckSquare className="w-3 h-3" />
               To Do
               {totalTaskCount > 0 && (
                 <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
