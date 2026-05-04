@@ -509,30 +509,8 @@ export default function Priorities() {
             })}
           </div>
 
-          {/* Controls — pinned to top-right, never wrap */}
-          <div className="flex items-center gap-2 flex-shrink-0 pt-[1px]">
-            <div className="relative" ref={sortMenuRef}>
-              <button onClick={() => setShowSortMenu(p => !p)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
-                  border whitespace-nowrap transition-colors ${
-                  showSortMenu ? 'bg-[#1A2330] border-[#1A2330] text-white' : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
-                }`}>
-                <ArrowUpDown className="w-3 h-3" />{sortLabel}
-              </button>
-              {showSortMenu && (
-                <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl border border-[#E4E7EC] shadow-[0_4px_16px_rgba(0,0,0,0.10)] py-1 min-w-[130px]">
-                  {SORT_OPTIONS.map(opt => (
-                    <button key={opt.key} onClick={() => { setSortBy(opt.key); setShowSortMenu(false); }}
-                      className={`w-full text-left px-4 py-2 text-[13px] hover:bg-[#F8F9FB] transition-colors ${sortBy === opt.key ? 'font-semibold text-[#1A2330]' : 'text-[#637083]'}`}>
-                      {opt.label}{sortBy === opt.key && <span className="float-right text-[#3B82F6]">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="w-px h-5 bg-[#E4E7EC]" />
-
+          {/* Actionables toggle — pinned top-right */}
+          <div className="flex-shrink-0 pt-[1px]">
             <button onClick={() => setView(v => v === 'tasks' ? 'feed' : 'tasks')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
                 border whitespace-nowrap transition-colors ${
@@ -543,7 +521,7 @@ export default function Priorities() {
                     : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
               }`}>
               <CheckSquare className="w-3 h-3" />
-              To Do
+              Actionables
               {totalTaskCount > 0 && (
                 <span className={`text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center leading-none ${
                   view === 'tasks' ? 'bg-white/20 text-white' : 'bg-[#F59E0B] text-white'
@@ -558,36 +536,66 @@ export default function Priorities() {
       {/* ── Content ─────────────────────────────────────────────────────── */}
       <div className="max-w-[800px] mx-auto px-8 py-6">
         {view === 'feed' ? (
-          filteredItems.length > 0 ? (
-            <div className="flex flex-col gap-5">
-              {filteredItems.map((item: any) => (
-                <PriorityFeedCard key={item._id} item={item}
-                  onPin={() => handlePin(item._id)}
-                  onDismiss={() => handleDismiss(item._id)}
-                  onCreateTask={handleCreateTask}
-                  onRemoveTask={handleRemoveTask}
-                />
-              ))}
+          <>
+            {/* Count + sort bar */}
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-[13px] font-medium text-[#97A1AF]">
+                {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
+              </span>
+              <div className="relative" ref={sortMenuRef}>
+                <button onClick={() => setShowSortMenu(p => !p)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-medium
+                    border whitespace-nowrap transition-colors ${
+                    showSortMenu
+                      ? 'bg-[#1A2330] border-[#1A2330] text-white'
+                      : 'bg-white border-[#E4E7EC] text-[#344051] hover:border-[#C1C9D4] hover:bg-[#FAFAFA]'
+                  }`}>
+                  Sort by: {sortLabel} <ArrowUpDown className="w-3.5 h-3.5 ml-0.5" />
+                </button>
+                {showSortMenu && (
+                  <div className="absolute right-0 top-[calc(100%+6px)] z-50 bg-white rounded-xl border border-[#E4E7EC] shadow-[0_4px_16px_rgba(0,0,0,0.10)] py-1 min-w-[140px]">
+                    {SORT_OPTIONS.map(opt => (
+                      <button key={opt.key} onClick={() => { setSortBy(opt.key); setShowSortMenu(false); }}
+                        className={`w-full text-left px-4 py-2 text-[13px] hover:bg-[#F8F9FB] transition-colors ${sortBy === opt.key ? 'font-semibold text-[#1A2330]' : 'text-[#637083]'}`}>
+                        {opt.label}{sortBy === opt.key && <span className="float-right text-[#3B82F6]">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-24 gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#F2F4F7] flex items-center justify-center text-xl">✓</div>
-              <p className="text-[14px] font-medium text-[#637083]">No items in this category</p>
-              <button onClick={() => setActiveFilter('all')} className="text-[13px] text-[#3B82F6] hover:underline">View all</button>
-            </div>
-          )
+
+            {filteredItems.length > 0 ? (
+              <div className="flex flex-col gap-5">
+                {filteredItems.map((item: any) => (
+                  <PriorityFeedCard key={item._id} item={item}
+                    onPin={() => handlePin(item._id)}
+                    onDismiss={() => handleDismiss(item._id)}
+                    onCreateTask={handleCreateTask}
+                    onRemoveTask={handleRemoveTask}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-24 gap-3">
+                <div className="w-12 h-12 rounded-full bg-[#F2F4F7] flex items-center justify-center text-xl">✓</div>
+                <p className="text-[14px] font-medium text-[#637083]">No items in this category</p>
+                <button onClick={() => setActiveFilter('all')} className="text-[13px] text-[#3B82F6] hover:underline">View all</button>
+              </div>
+            )}
+          </>
         ) : (
-          /* ── Tasks view: two groups ──────────────────────────────────── */
+          /* ── Actionables view ────────────────────────────────────── */
           <div className="flex flex-col gap-8">
 
-            {/* Group 1: Tasks */}
+            {/* Actionables list */}
             <section>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">To Do</span>
+                <span className="text-[11px] font-bold text-[#344051] uppercase tracking-wider">Actionables</span>
                 <span className="text-[11px] font-semibold text-[#97A1AF]">{createdTasks.length + taskList.length}</span>
               </div>
               {createdTasks.length === 0 && taskList.length === 0 ? (
-                <p className="text-[13px] text-[#97A1AF] px-1">Nothing to do yet.</p>
+                <p className="text-[13px] text-[#97A1AF] px-1">No actionables yet.</p>
               ) : (
                 <div className="flex flex-col gap-2.5">
                   {createdTasks.map(task => <TaskCard key={task._id} item={task} isNew />)}

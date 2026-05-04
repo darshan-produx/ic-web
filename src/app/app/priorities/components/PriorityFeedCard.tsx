@@ -257,7 +257,7 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
         <div key={chip.id}
           className="ic-float-chip fixed pointer-events-none z-[9999] flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#059669] text-white text-[11px] font-bold shadow-lg"
           style={{ top: chip.top, left: chip.left, transform: 'translate(-50%,-50%)' }}>
-          <Check className="w-3 h-3" /> Added to tasks
+          <Check className="w-3 h-3" /> Added to actionables
         </div>
       ))}
 
@@ -349,7 +349,7 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
                 }`}>
                 {taskCreated
                   ? <><Check className="w-3 h-3" /> Added</>
-                  : <><PlusCircle className="w-3 h-3" /> To Do</>
+                  : <><PlusCircle className="w-3 h-3" /> Actionable</>
                 }
               </button>
             </div>
