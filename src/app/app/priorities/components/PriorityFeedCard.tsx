@@ -2,23 +2,13 @@
 
 import { useState } from 'react';
 import {
-  Pin, X, ArrowUpRight, TrendingDown, TrendingUp,
-  RefreshCw, Users, Zap, PlusCircle, Check, Cake, Star,
+  Pin, X, TrendingDown, TrendingUp,
+  RefreshCw, Users, Zap, Check, Cake, Star,
 } from 'lucide-react';
 import Link from 'next/link';
 import OutlineButton from '../../../../common/components/OutlineButton';
 
-// ─── Real logo URLs ────────────────────────────────────────────────────────────
-const CUSTOMER_LOGOS: Record<string, string[]> = {
-  Meesho:          ['https://logo.clearbit.com/meesho.com', 'https://www.google.com/s2/favicons?domain=meesho.com&sz=128'],
-  Pharmeasy:       ['https://logo.clearbit.com/pharmeasy.in', 'https://www.google.com/s2/favicons?domain=pharmeasy.in&sz=128'],
-  Zerodha:         ['https://logo.clearbit.com/zerodha.com', 'https://www.google.com/s2/favicons?domain=zerodha.com&sz=128'],
-  CRED:            ['https://logo.clearbit.com/cred.club', 'https://www.google.com/s2/favicons?domain=cred.club&sz=128'],
-  'Urban Company': ['https://logo.clearbit.com/urbancompany.com', 'https://www.google.com/s2/favicons?domain=urbancompany.com&sz=128'],
-  Swiggy:          ['https://logo.clearbit.com/swiggy.com', 'https://www.google.com/s2/favicons?domain=swiggy.com&sz=128'],
-  Nykaa:           ['https://logo.clearbit.com/nykaa.com', 'https://www.google.com/s2/favicons?domain=nykaa.com&sz=128'],
-  Lenskart:        ['https://logo.clearbit.com/lenskart.com', 'https://www.google.com/s2/favicons?domain=lenskart.com&sz=128'],
-};
+// (logo lookup removed — cards no longer show customer logos)
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CATEGORY_CONFIG: Record<string, {
@@ -176,23 +166,6 @@ function AvatarGroup({ customerName }: { customerName: string }) {
   );
 }
 
-function CustomerLogo({ name, avatarBg }: { name: string; avatarBg: string }) {
-  const [srcIdx, setSrcIdx] = useState(0);
-  const sources = CUSTOMER_LOGOS[name] ?? [];
-  if (sources.length === 0 || srcIdx >= sources.length) {
-    return (
-      <div className="w-10 h-10 rounded-[8px] flex items-center justify-center text-white text-[15px] font-bold flex-shrink-0"
-        style={{ background: avatarBg }}>{name[0]?.toUpperCase()}</div>
-    );
-  }
-  return (
-    <div className="w-10 h-10 rounded-[8px] overflow-hidden border border-[#E4E7EC] bg-white flex-shrink-0">
-      <img src={sources[srcIdx]} alt={name} className="w-full h-full object-contain"
-        onError={() => setSrcIdx(i => i + 1)} />
-    </div>
-  );
-}
-
 function formatINR(v: number | null | undefined): string | null {
   if (!v) return null;
   if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(1)}Cr`;
@@ -266,26 +239,35 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
         className="group relative rounded-[12px] border border-[#E4E7EC] bg-white transition-all duration-200 hover:shadow-sm"
         style={isCelebration ? getCelebStyle(item.celebration_type) : undefined}
       >
+        {/* Dismiss X — pops half-outside top-right corner on hover */}
+        <button
+          onClick={onDismiss}
+          className="absolute -top-3 -right-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity
+            w-7 h-7 rounded-full bg-white border-2 border-[#E4E7EC] shadow-md
+            flex items-center justify-center
+            text-[#637083] hover:text-white hover:bg-[#EF4444] hover:border-[#EF4444]"
+          title="Dismiss"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+
         <div className="px-5 py-4 flex flex-col gap-3">
 
-          {/* Row 1: logo · customer name · visual widget */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <CustomerLogo name={item.customer_name} avatarBg={cat.avatarBg} />
-              <p className="text-[12px] text-[#637083] font-normal leading-tight flex items-center gap-1.5">
-                {item.customer_name}
-                {isCelebration && (item.celebration_type === 'birthday'
-                  ? <Cake className="w-3.5 h-3.5 text-[#F59E0B]" />
-                  : <Star className="w-3.5 h-3.5 text-[#10B981]" />
-                )}
-              </p>
-            </div>
+          {/* Row 1: customer name · visual widget */}
+          <div className="flex items-start justify-between gap-4 pr-6">
+            <p className="text-[13px] font-semibold text-[#202B37] leading-tight flex items-center gap-1.5 pt-0.5">
+              {item.customer_name}
+              {isCelebration && (item.celebration_type === 'birthday'
+                ? <Cake className="w-3.5 h-3.5 text-[#F59E0B]" />
+                : <Star className="w-3.5 h-3.5 text-[#10B981]" />
+              )}
+            </p>
             <CardVisual item={item} cat={cat} />
           </div>
 
           {/* Row 2: title */}
           <Link href={href} className="block group/link">
-            <p className="text-[14px] font-medium text-[#141C24] leading-snug group-hover/link:text-[#3B82F6] transition-colors">
+            <p className="text-[16px] font-bold text-[#141C24] leading-snug group-hover/link:text-[#3B82F6] transition-colors">
               {item.title}
             </p>
           </Link>
@@ -297,64 +279,54 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
             </p>
           )}
 
-          {/* Row 4: chips · hover actions · add task button */}
-          <div className="flex items-center justify-between gap-2">
-            {/* Left chips */}
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              {item.is_pinned && <Pin className="w-3 h-3 text-[#3B82F6] flex-shrink-0" />}
-              {/* Category badge — data visualization element, keep colored style */}
+          {/* Row 4: pin · chips · add todo button */}
+          <div className="flex items-center gap-2">
+            {/* Pin icon — left side, takes NO space until hovered or pinned */}
+            <button
+              onClick={onPin}
+              title={item.is_pinned ? 'Unpin' : 'Pin to top'}
+              className={`flex-shrink-0 transition-all duration-150 overflow-hidden ${
+                item.is_pinned
+                  ? 'w-5 opacity-100'
+                  : 'w-0 opacity-0 group-hover:w-5 group-hover:opacity-100'
+              }`}
+            >
+              <Pin className={`w-4 h-4 ${item.is_pinned ? 'text-[#3B82F6] fill-[#3B82F6]' : 'text-[#CED2DA] hover:text-[#637083]'}`} />
+            </button>
+
+            {/* Badges */}
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
               <span
-                className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-[6px] whitespace-nowrap"
+                className="inline-flex items-center gap-1 h-8 px-3 rounded-[8px] text-[12px] font-medium whitespace-nowrap"
                 style={{ background: cat.bgLight, color: cat.textColor }}>
                 {cat.icon}{cat.label}
               </span>
               {valueLabel && (
-                <span className="text-[12px] font-medium text-[#344051] bg-[#F2F4F7] px-2 py-0.5 rounded-[6px] whitespace-nowrap">
+                <span className="inline-flex items-center h-8 px-3 rounded-[8px] text-[12px] font-medium text-[#344051] bg-[#F2F4F7] whitespace-nowrap">
                   {valueLabel} ARR
                 </span>
               )}
               {(item.other_signals_count ?? 0) > 0 && (
-                <span className="text-[12px] font-medium text-[#344051] bg-[#F2F4F7] px-2 py-0.5 rounded-[6px] whitespace-nowrap">
+                <span className="inline-flex items-center h-8 px-3 rounded-[8px] text-[12px] font-medium text-[#344051] bg-[#F2F4F7] whitespace-nowrap">
                   +{item.other_signals_count} signal{item.other_signals_count > 1 ? 's' : ''}
                 </span>
               )}
             </div>
 
-            {/* Right: hover utility buttons + always-visible add task */}
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <div className="flex items-center gap-1 max-w-0 overflow-hidden opacity-0
-                group-hover:max-w-[200px] group-hover:opacity-100 transition-all duration-150 group-hover:mr-1">
-                <button onClick={onPin}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-[6px] text-[12px] font-medium whitespace-nowrap transition-colors ${
-                    item.is_pinned ? 'text-[#3B82F6] hover:bg-[#EFF6FF]' : 'text-[#637083] hover:bg-[#F2F4F7]'}`}>
-                  <Pin className="w-[11px] h-[11px]" />
-                  {item.is_pinned ? 'Unpin' : 'Pin'}
-                </button>
-                <button onClick={onDismiss}
-                  className="flex items-center gap-1 px-2 py-1 rounded-[6px] text-[12px] font-medium text-[#637083] hover:bg-[#FEF2F2] hover:text-[#EF4444] transition-colors whitespace-nowrap">
-                  <X className="w-[11px] h-[11px]" /> Dismiss
-                </button>
-                <Link href={href}
-                  className="flex items-center gap-0.5 px-2 py-1 rounded-[6px] text-[12px] font-medium text-[#3B82F6] hover:bg-[#EFF6FF] transition-colors whitespace-nowrap">
-                  Open <ArrowUpRight className="w-[11px] h-[11px]" />
-                </Link>
-              </div>
-
-              {/* Add task / Added — OutlineButton with className overrides */}
-              <OutlineButton
-                onClick={handleCreateTask}
-                className={`gap-1.5 ${
-                  taskCreated
-                    ? '!bg-[#ECFDF5] !border-[#A7F3D0] !text-[#059669] hover:!bg-[#FEF2F2] hover:!border-[#FCA5A5] hover:!text-[#DC2626]'
-                    : 'hover:!bg-[#F2F4F7]'
-                }`}
-              >
-                {taskCreated
-                  ? <><Check className="w-3 h-3" /> Added</>
-                  : <><PlusCircle className="w-3 h-3" /> Add task</>
-                }
-              </OutlineButton>
-            </div>
+            {/* Add todo / Added */}
+            <OutlineButton
+              onClick={handleCreateTask}
+              className={`flex-shrink-0 ${
+                taskCreated
+                  ? '!bg-[#ECFDF5] !border-[#A7F3D0] !text-[#059669] hover:!bg-[#FEF2F2] hover:!border-[#FCA5A5] hover:!text-[#DC2626]'
+                  : 'hover:!bg-[#F2F4F7]'
+              }`}
+            >
+              {taskCreated
+                ? <><Check className="w-3 h-3" /> Added</>
+                : 'Add todo'
+              }
+            </OutlineButton>
           </div>
 
         </div>

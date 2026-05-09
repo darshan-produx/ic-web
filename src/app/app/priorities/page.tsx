@@ -7,19 +7,18 @@ import {
   getPrioritySignalsAndOpportunites,
 } from '../../api/priorities/priorities';
 import { apiRequest } from '../../../common/api-request';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { formatRevenue } from '../../../common/SupportFunctions';
 import { getportfolioTeam } from '../../api/my-team/my-team';
 import { getMyTeamConfigs } from '../../api/customers/customers';
 import { PriorityFeedCard } from './components/PriorityFeedCard';
 import {
   Check, AlertTriangle, ChevronDown,
-  TrendingDown, TrendingUp, RefreshCw, Users, Zap, PlusCircle,
+  TrendingDown, TrendingUp, RefreshCw, Users, Zap,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import OutlineButton from '../../../common/components/OutlineButton';
 import { Dropdown } from '../../../common/Dropdown';
-import SingleSelectDropDown from '../../../common/components/SingleSelectDropDown';
 
 // ─── Injected styles (only the float-chip animation used by PriorityFeedCard) ──
 const INJECTED_STYLES = `
@@ -52,11 +51,11 @@ const VISIBLE_FILTERS = [
   { key: 'at_risk',        label: 'Customers at risk' },
   { key: 'signal_pattern', label: 'Signal patterns' },
   { key: 'expansion',      label: 'Expansion' },
+  { key: 'relationship',   label: 'Relationships' },
 ] as const;
 
 const MORE_FILTERS = [
   { key: 'upcoming_renewal', label: 'Renewals' },
-  { key: 'relationship',     label: 'Relationships' },
   { key: 'onboarding',       label: 'Onboarding' },
   { key: 'qbr_due',          label: 'QBR Due' },
   { key: 'escalation',       label: 'Escalation' },
@@ -66,24 +65,34 @@ const MORE_FILTERS = [
 const ALL_FILTERS = [...VISIBLE_FILTERS, ...MORE_FILTERS];
 
 const SORT_OPTIONS = [
-  { key: 'smart',     label: 'Smart' },
-  { key: 'newest',    label: 'Newest' },
-  { key: 'arr',       label: 'ARR ↓' },
-  { key: 'intensity', label: 'Intensity' },
+  { key: 'newest', label: 'Sort by time' },
+  { key: 'arr',    label: 'Sort by value' },
 ] as const;
 
-const IS = { urgent: 4, high: 3, medium: 2, low: 1 } as Record<string, number>;
+// Interleave items across categories so no single category dominates
+function interleaveByCategory(items: any[]): any[] {
+  const byCategory: Record<string, any[]> = {};
+  items.forEach(i => {
+    const cat = i.category ?? 'other';
+    (byCategory[cat] = byCategory[cat] ?? []).push(i);
+  });
+  const queues = Object.values(byCategory).map(q => [...q]);
+  const result: any[] = [];
+  let idx = 0;
+  while (result.length < items.length && idx < items.length * queues.length) {
+    const q = queues[idx % queues.length];
+    if (q && q.length > 0) result.push(q.shift());
+    idx++;
+  }
+  return result;
+}
 
 function applySortOrder(items: any[], sortBy: string): any[] {
   const pinned = items.filter(i => i.is_pinned);
-  const rest   = [...items.filter(i => !i.is_pinned)];
-  const sorted = (() => {
-    if (sortBy === 'arr')       return rest.sort((a,b) => (b.value_at_stake??0) - (a.value_at_stake??0));
-    if (sortBy === 'newest')    return rest.sort((a,b) => new Date(b.signal_created_at??0).getTime() - new Date(a.signal_created_at??0).getTime());
-    if (sortBy === 'intensity') return rest.sort((a,b) => (IS[b.intensity]??0) - (IS[a.intensity]??0));
-    const sc = (i: any) => { let s=(IS[i.intensity]??1)*10; if(i.celebration_type) s+=55; if(i.value_at_stake) s+=Math.min(20,i.value_at_stake/2_500_000); return s; };
-    return rest.sort((a,b) => sc(b) - sc(a));
-  })();
+  const rest   = items.filter(i => !i.is_pinned);
+  const sorted = sortBy === 'arr'
+    ? [...rest].sort((a, b) => (b.value_at_stake ?? 0) - (a.value_at_stake ?? 0))
+    : interleaveByCategory(rest);
   return [...pinned, ...sorted];
 }
 
@@ -190,11 +199,22 @@ function ActionableRow({ item, isNew }: { item: any; isNew?: boolean }) {
 export default function Priorities() {
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [view,         setView]         = useState<'feed' | 'tasks'>('feed');
-  const [sortBy,       setSortBy]       = useState<string>('smart');
+  const [sortBy,       setSortBy]       = useState<string>('newest');
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [pinnedIds,    setPinnedIds]    = useState<Set<string>>(new Set());
   const [createdTasks, setCreatedTasks] = useState<any[]>([]);
   const [addedIds,     setAddedIds]     = useState<Set<string>>(new Set());
+
+  // Scroll tracking for progressive header collapse
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollY, setScrollY] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const fn = () => setScrollY(el.scrollTop);
+    el.addEventListener('scroll', fn, { passive: true });
+    return () => el.removeEventListener('scroll', fn);
+  }, []);
 
   // ── Queries ──────────────────────────────────────────────────────────────────
   const { data: portfolioData } = useQuery({
@@ -242,8 +262,7 @@ export default function Priorities() {
     };
   }, [myTeamConfigData?.data]);
 
-  // Keep metricItems in scope (data fetched, not displayed in header per design)
-  const _metricItems = useMemo(() => {
+  const metricItems = useMemo(() => {
     const items: { label: string; value: string }[] = [];
     if (myTeamConfig?.Accounts?.enabled)       items.push({ label: myTeamConfig.Accounts.display_name,       value: String(agg?.accounts ?? '–') });
     if (myTeamConfig?.ARR?.enabled)            items.push({ label: myTeamConfig.ARR.display_name,            value: `${sym}${formatRevenue(agg?.arr, cur)}` });
@@ -319,32 +338,60 @@ export default function Priorities() {
     (userinfo?.data?.name ? String(userinfo.data.name).split(' ')[0] : '') ?? '';
   const greeting   = getGreeting();
   const todayLabel = dayjs().format('ddd, MMM D').toUpperCase();
-  const sortLabel  = SORT_OPTIONS.find(s => s.key === sortBy)?.label ?? 'Smart';
+  const sortLabel  = SORT_OPTIONS.find(s => s.key === sortBy)?.label ?? 'Sort by time';
+
+  const showMetrics  = scrollY < 90;
+  const showGreeting = scrollY < 200;
+
+  // Gradient shared between sticky greeting + metrics strip
+  const HEADER_BG = 'linear-gradient(135deg,#FFF8F3 0%,#FFF3EE 40%,#FFFBFF 75%,#F3F0FF 100%)';
 
   return (
-    <div className="h-[calc(100vh-64px)] overflow-y-auto bg-white">
+    <div ref={containerRef} className="h-[calc(100vh-64px)] overflow-y-auto">
       <style dangerouslySetInnerHTML={{ __html: INJECTED_STYLES }} />
 
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="max-w-[800px] mx-auto px-8 pt-8 pb-5">
-        <p className="text-[11px] font-semibold text-[#97A1AF] tracking-widest uppercase mb-1">{todayLabel}</p>
-        <h1 className="text-[22px] font-semibold text-[#141C24] leading-tight">
-          {greeting}{firstName && `, ${firstName}`}.
-        </h1>
+      {/* ── Progressive header ──────────────────────────────────────────── */}
+      <div style={{ background: HEADER_BG }}>
+
+        {/* Greeting — sticky within the header block; stays while metrics scroll away */}
+        <div
+          className="sticky top-0 z-[9] text-center px-8 pt-8 transition-all duration-300"
+          style={{ background: HEADER_BG, paddingBottom: showGreeting ? '1rem' : '0.75rem' }}
+        >
+          <p className="text-[11px] font-semibold text-[#97A1AF] tracking-widest uppercase mb-2">{todayLabel}</p>
+          <h1 className="text-[24px] font-bold text-[#141C24] leading-tight">
+            {greeting}{firstName && `, ${firstName}`}.
+          </h1>
+        </div>
+
+        {/* Metrics — collapses first on scroll */}
+        <div
+          className="overflow-hidden transition-all duration-300 text-center px-8"
+          style={{ maxHeight: showMetrics ? '160px' : '0px', opacity: showMetrics ? 1 : 0, paddingBottom: showMetrics ? '2rem' : '0' }}
+        >
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 pt-4">
+            {metricItems.map(m => (
+              <div key={m.label} className="flex flex-col items-center gap-0.5 min-w-[56px]">
+                <span className="text-[11px] font-medium text-[#97A1AF]">{m.label}</span>
+                <span className="text-[15px] font-bold text-[#141C24]">{m.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* ── Sticky toolbar ──────────────────────────────────────────────── */}
+      {/* ── Sticky toolbar (sticks to top after header scrolls away) ────── */}
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-[#E4E7EC]">
-        <div className="max-w-[800px] mx-auto px-8 py-2 flex items-center gap-1.5">
+        <div className="max-w-[800px] mx-auto px-8 py-2 flex items-center gap-1.5 flex-wrap">
 
           {/* Visible filter pills */}
           {VISIBLE_FILTERS.map(f => {
             const count    = categoryCount[f.key] ?? 0;
-            const isActive = activeFilter === f.key;
+            const isActive = view === 'feed' && activeFilter === f.key;
             return (
               <OutlineButton
                 key={f.key}
-                onClick={() => setActiveFilter(f.key)}
+                onClick={() => { setActiveFilter(f.key); setView('feed'); }}
                 className={`gap-1.5 ${isActive ? '!bg-[#141C24] !text-white !border-[#141C24]' : 'hover:!bg-[#F2F4F7]'}`}
               >
                 {f.label}
@@ -357,29 +404,29 @@ export default function Priorities() {
             );
           })}
 
-          {/* More dropdown */}
+          {/* More dropdown — always visible */}
           <Dropdown className="relative inline-flex">
             <Dropdown.Trigger
               className={`h-8 w-fit text-nowrap px-3 rounded-[8px] text-[12px] font-medium box-border flex items-center gap-1 border ${
-                activeMoreFilter
+                view === 'feed' && activeMoreFilter
                   ? 'bg-[#141C24] text-white border-[#141C24]'
                   : 'bg-white border-[#CED2DA] text-[#202B37] hover:bg-[#F2F4F7]'
               }`}
             >
-              {activeMoreFilter ? activeMoreFilter.label : `More (${MORE_FILTERS.length})`}
+              {view === 'feed' && activeMoreFilter ? activeMoreFilter.label : `More`}
               <ChevronDown className="w-3.5 h-3.5" />
             </Dropdown.Trigger>
             <Dropdown.Content
-              placement="bottom-start"
-              className="absolute z-[9999] top-full mt-1 left-0 bg-white border border-[#CED2DA] rounded-[8px] shadow-md py-1 min-w-[160px]"
+              placement="bottom"
+              className="absolute z-[9999] top-full left-0 bg-white border border-[#CED2DA] rounded-[8px] shadow-lg py-1 min-w-[160px]"
             >
               {MORE_FILTERS.map(f => {
                 const count    = categoryCount[f.key] ?? 0;
-                const isActive = activeFilter === f.key;
+                const isActive = view === 'feed' && activeFilter === f.key;
                 return (
                   <button
                     key={f.key}
-                    onClick={() => setActiveFilter(f.key)}
+                    onClick={() => { setActiveFilter(f.key); setView('feed'); }}
                     className={`w-full text-left px-3 py-2 text-[12px] flex items-center justify-between gap-2 transition-colors rounded-[6px] close-dropdown ${
                       isActive ? 'bg-[#F2F4F7] text-[#141C24] font-medium' : 'text-[#344051] hover:bg-[#F2F4F7]'
                     }`}
@@ -395,9 +442,12 @@ export default function Priorities() {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Todo / Actionables button */}
+          {/* Todo button */}
           <OutlineButton
-            onClick={() => setView(v => v === 'tasks' ? 'feed' : 'tasks')}
+            onClick={() => {
+              if (view === 'tasks') { setView('feed'); }
+              else { setView('tasks'); setActiveFilter('all'); }
+            }}
             className={`gap-1.5 ${view === 'tasks' ? '!bg-[#FFFBEB] !border-[#F59E0B] !text-[#B45309]' : 'hover:!bg-[#F2F4F7]'}`}
           >
             <span>Todo</span>
@@ -413,7 +463,7 @@ export default function Priorities() {
       </div>
 
       {/* ── Content ─────────────────────────────────────────────────────── */}
-      <div className="max-w-[800px] mx-auto px-8 py-6">
+      <div className="max-w-[800px] mx-auto px-8 py-6 bg-white">
         {view === 'feed' ? (
           <>
             {/* Count + sort bar */}
@@ -421,18 +471,32 @@ export default function Priorities() {
               <span className="text-[12px] text-[#97A1AF]">
                 {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
               </span>
-              <SingleSelectDropDown
-                filteredArr={SORT_OPTIONS.map(o => ({ ...o, selected: o.key === sortBy }))}
-                dataFieldToUseForSelection="label"
-                typeOfData={`Sort by: ${sortLabel}`}
-                handleSelection={(opt: any) => setSortBy(opt.key)}
-                contentCss="!min-w-[160px]"
-                triggerTextCss="w-[160px]"
-              />
+              <Dropdown className="relative inline-flex">
+                <Dropdown.Trigger className="h-8 px-3 rounded-[8px] text-[12px] font-medium border border-[#CED2DA] bg-white text-[#202B37] hover:bg-[#F2F4F7] flex items-center gap-1.5 whitespace-nowrap">
+                  {sortLabel}
+                  <ChevronDown className="w-3.5 h-3.5 text-[#97A1AF]" />
+                </Dropdown.Trigger>
+                <Dropdown.Content
+                  placement="bottom"
+                  className="absolute z-[9999] top-full right-0 bg-white border border-[#CED2DA] rounded-[8px] shadow-lg py-1 min-w-[140px]"
+                >
+                  {SORT_OPTIONS.map(o => (
+                    <button
+                      key={o.key}
+                      onClick={() => setSortBy(o.key)}
+                      className={`w-full text-left px-3 py-2 text-[12px] flex items-center gap-2 transition-colors rounded-[6px] close-dropdown ${
+                        o.key === sortBy ? 'bg-[#F2F4F7] text-[#141C24] font-medium' : 'text-[#344051] hover:bg-[#F2F4F7]'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </Dropdown.Content>
+              </Dropdown>
             </div>
 
             {filteredItems.length > 0 ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-5">
                 {filteredItems.map((item: any) => (
                   <PriorityFeedCard
                     key={item._id}
@@ -448,7 +512,7 @@ export default function Priorities() {
               <div className="flex flex-col items-center justify-center py-24 gap-3">
                 <div className="w-12 h-12 rounded-full bg-[#F2F4F7] flex items-center justify-center text-xl">✓</div>
                 <p className="text-[14px] font-medium text-[#637083]">No items in this category</p>
-                <button onClick={() => setActiveFilter('all')} className="text-[12px] text-[#3B82F6] hover:underline">
+                <button onClick={() => { setActiveFilter('all'); setView('feed'); }} className="text-[12px] text-[#3B82F6] hover:underline">
                   View all
                 </button>
               </div>
@@ -461,7 +525,6 @@ export default function Priorities() {
               <span className="text-[11px] font-bold text-[#344051] uppercase tracking-widest">Actionables</span>
               <span className="text-[11px] font-semibold text-[#97A1AF]">{createdTasks.length + taskList.length}</span>
             </div>
-
             {createdTasks.length === 0 && taskList.length === 0 ? (
               <p className="text-[12px] text-[#97A1AF] px-1">No actionables yet.</p>
             ) : (
