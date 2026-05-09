@@ -6,6 +6,7 @@ import {
   RefreshCw, Users, Zap, PlusCircle, Check, Cake, Star,
 } from 'lucide-react';
 import Link from 'next/link';
+import OutlineButton from '../../../../common/components/OutlineButton';
 
 // ─── Real logo URLs ────────────────────────────────────────────────────────────
 const CUSTOMER_LOGOS: Record<string, string[]> = {
@@ -101,7 +102,7 @@ function PieRing({ data, color }: { data: { value: number; max: number; label: s
           strokeDasharray={C} strokeDashoffset={C - (pct / 100) * C}
           strokeLinecap="round" transform="rotate(-90 24 24)" />
         <text x="24" y="24" textAnchor="middle" dominantBaseline="central"
-          fontSize="11" fontWeight="700" fill="#1A2330">{data.value}</text>
+          fontSize="11" fontWeight="700" fill="#141C24">{data.value}</text>
       </svg>
       <span className="text-[9px] font-medium text-[#97A1AF] whitespace-nowrap">{data.label}</span>
     </div>
@@ -131,7 +132,7 @@ function Countdown({ data, color }: { data: { days: number; label: string }; col
     <div className="flex flex-col items-center gap-0 flex-shrink-0">
       <span className="text-[28px] font-black tabular-nums leading-none" style={{ color: c }}>{data.days}</span>
       <span className="text-[10px] font-semibold text-[#97A1AF]">days</span>
-      <span className="text-[9px] text-[#B0BAC8] mt-0.5 whitespace-nowrap">{data.label}</span>
+      <span className="text-[9px] text-[#97A1AF] mt-0.5 whitespace-nowrap">{data.label}</span>
     </div>
   );
 }
@@ -180,12 +181,12 @@ function CustomerLogo({ name, avatarBg }: { name: string; avatarBg: string }) {
   const sources = CUSTOMER_LOGOS[name] ?? [];
   if (sources.length === 0 || srcIdx >= sources.length) {
     return (
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-[15px] font-bold flex-shrink-0"
+      <div className="w-10 h-10 rounded-[8px] flex items-center justify-center text-white text-[15px] font-bold flex-shrink-0"
         style={{ background: avatarBg }}>{name[0]?.toUpperCase()}</div>
     );
   }
   return (
-    <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#ECEEF1] bg-white flex-shrink-0">
+    <div className="w-10 h-10 rounded-[8px] overflow-hidden border border-[#E4E7EC] bg-white flex-shrink-0">
       <img src={sources[srcIdx]} alt={name} className="w-full h-full object-contain"
         onError={() => setSrcIdx(i => i + 1)} />
     </div>
@@ -230,7 +231,7 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
   const [taskCreated, setTaskCreated] = useState(false);
   const [chips, setChips]             = useState<Chip[]>([]);
 
-  const cat          = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.signal_pattern;
+  const cat           = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.signal_pattern;
   const isCelebration = !!item.celebration_type;
   const href = item.collection_type === 'signal'
     ? `/app/customers/${item.customer_id}?activeTab=open_issues`
@@ -262,19 +263,16 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
       ))}
 
       <div
-        className="group relative rounded-2xl transition-all duration-200
-          border border-[#ECEEF1]
-          hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_20px_44px_rgba(0,0,0,0.09)]
-          hover:border-transparent"
-        style={isCelebration ? getCelebStyle(item.celebration_type) : { background: '#fff' }}
+        className="group relative rounded-[12px] border border-[#E4E7EC] bg-white transition-all duration-200 hover:shadow-sm"
+        style={isCelebration ? getCelebStyle(item.celebration_type) : undefined}
       >
-        <div className="px-6 pt-5 pb-5 flex flex-col gap-3.5">
+        <div className="px-5 py-4 flex flex-col gap-3">
 
-          {/* Row 1: logo · name · visual */}
+          {/* Row 1: logo · customer name · visual widget */}
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <CustomerLogo name={item.customer_name} avatarBg={cat.avatarBg} />
-              <p className="text-[15px] font-normal text-[#1A2330] leading-tight flex items-center gap-1.5">
+              <p className="text-[12px] text-[#637083] font-normal leading-tight flex items-center gap-1.5">
                 {item.customer_name}
                 {isCelebration && (item.celebration_type === 'birthday'
                   ? <Cake className="w-3.5 h-3.5 text-[#F59E0B]" />
@@ -287,71 +285,75 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
 
           {/* Row 2: title */}
           <Link href={href} className="block group/link">
-            <p className="text-[16px] font-semibold text-[#1A2330] leading-snug group-hover/link:text-[#3B82F6] transition-colors">
+            <p className="text-[14px] font-medium text-[#141C24] leading-snug group-hover/link:text-[#3B82F6] transition-colors">
               {item.title}
             </p>
           </Link>
 
-          {/* Row 3: summary */}
+          {/* Row 3: description / summary */}
           {item.signal_summary && (
-            <p className="text-[13px] text-[#637083] leading-relaxed">
+            <p className="text-[12px] text-[#637083] leading-relaxed line-clamp-2">
               {item.signal_summary}
             </p>
           )}
 
-          {/* Row 4: chips · hover actions · add task */}
+          {/* Row 4: chips · hover actions · add task button */}
           <div className="flex items-center justify-between gap-2">
             {/* Left chips */}
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
               {item.is_pinned && <Pin className="w-3 h-3 text-[#3B82F6] flex-shrink-0" />}
+              {/* Category badge — data visualization element, keep colored style */}
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-[6px] whitespace-nowrap"
+                style={{ background: cat.bgLight, color: cat.textColor }}>
+                {cat.icon}{cat.label}
+              </span>
               {valueLabel && (
-                <span className="text-[12px] font-semibold text-[#344051] bg-[#F2F4F7] px-2.5 py-1 rounded-lg whitespace-nowrap">
+                <span className="text-[12px] font-medium text-[#344051] bg-[#F2F4F7] px-2 py-0.5 rounded-[6px] whitespace-nowrap">
                   {valueLabel} ARR
                 </span>
               )}
               {(item.other_signals_count ?? 0) > 0 && (
-                <span className="text-[11px] text-[#637083] bg-[#F8F9FB] px-2 py-1 rounded-lg border border-[#ECEEF1] whitespace-nowrap">
+                <span className="text-[12px] font-medium text-[#344051] bg-[#F2F4F7] px-2 py-0.5 rounded-[6px] whitespace-nowrap">
                   +{item.other_signals_count} signal{item.other_signals_count > 1 ? 's' : ''}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-md whitespace-nowrap"
-                style={{ background: cat.bgLight, color: cat.textColor }}>
-                {cat.icon}{cat.label}
-              </span>
             </div>
 
-            {/* Right: hover secondary + always-visible add task */}
+            {/* Right: hover utility buttons + always-visible add task */}
             <div className="flex items-center gap-1 flex-shrink-0">
               <div className="flex items-center gap-1 max-w-0 overflow-hidden opacity-0
                 group-hover:max-w-[200px] group-hover:opacity-100 transition-all duration-150 group-hover:mr-1">
                 <button onClick={onPin}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors ${
+                  className={`flex items-center gap-1 px-2 py-1 rounded-[6px] text-[12px] font-medium whitespace-nowrap transition-colors ${
                     item.is_pinned ? 'text-[#3B82F6] hover:bg-[#EFF6FF]' : 'text-[#637083] hover:bg-[#F2F4F7]'}`}>
                   <Pin className="w-[11px] h-[11px]" />
                   {item.is_pinned ? 'Unpin' : 'Pin'}
                 </button>
                 <button onClick={onDismiss}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium text-[#637083] hover:bg-[#FEF2F2] hover:text-[#EF4444] transition-colors whitespace-nowrap">
+                  className="flex items-center gap-1 px-2 py-1 rounded-[6px] text-[12px] font-medium text-[#637083] hover:bg-[#FEF2F2] hover:text-[#EF4444] transition-colors whitespace-nowrap">
                   <X className="w-[11px] h-[11px]" /> Dismiss
                 </button>
                 <Link href={href}
-                  className="flex items-center gap-0.5 px-2.5 py-1 rounded-full text-[12px] font-medium text-[#3B82F6] hover:bg-[#EFF6FF] transition-colors whitespace-nowrap">
+                  className="flex items-center gap-0.5 px-2 py-1 rounded-[6px] text-[12px] font-medium text-[#3B82F6] hover:bg-[#EFF6FF] transition-colors whitespace-nowrap">
                   Open <ArrowUpRight className="w-[11px] h-[11px]" />
                 </Link>
               </div>
 
-              <button onClick={handleCreateTask}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold
-                  border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+              {/* Add task / Added — OutlineButton with className overrides */}
+              <OutlineButton
+                onClick={handleCreateTask}
+                className={`gap-1.5 ${
                   taskCreated
-                    ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669] hover:bg-[#FEF2F2] hover:border-[#FCA5A5] hover:text-[#DC2626]'
-                    : 'bg-white border-[#D1FAE5] text-[#059669] hover:bg-[#ECFDF5] hover:border-[#6EE7B7]'
-                }`}>
+                    ? '!bg-[#ECFDF5] !border-[#A7F3D0] !text-[#059669] hover:!bg-[#FEF2F2] hover:!border-[#FCA5A5] hover:!text-[#DC2626]'
+                    : 'hover:!bg-[#F2F4F7]'
+                }`}
+              >
                 {taskCreated
                   ? <><Check className="w-3 h-3" /> Added</>
-                  : <><PlusCircle className="w-3 h-3" /> Actionable</>
+                  : <><PlusCircle className="w-3 h-3" /> Add task</>
                 }
-              </button>
+              </OutlineButton>
             </div>
           </div>
 
