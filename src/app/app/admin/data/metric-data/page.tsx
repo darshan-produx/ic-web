@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useCallback } from 'react';
-import { Search, Download, Upload, ChevronDown, Check, X, PencilLine, Pencil, Ban } from 'lucide-react';
+import { Search, Download, Upload, ChevronDown, Check, X, PencilLine, Plus, SlidersHorizontal } from 'lucide-react';
 import GridView from '../../../../../common/components/GridView';
 import { Dropdown } from '../../../../../common/Dropdown';
 
@@ -261,9 +261,6 @@ export default function MetricDataPage() {
   const allSelected = filteredData.length > 0 && filteredData.every(r => selectedRowIds.has(r.id));
   const someSelected = filteredData.some(r => selectedRowIds.has(r.id)) && !allSelected;
 
-  // All selected rows are already disabled? Then button becomes "Enable".
-  const allSelectedDisabled = hasSelection && Array.from(selectedRowIds).every(id => disabledIds.has(id));
-
   const toggleAll = useCallback(() => {
     if (allSelected) setSelectedRowIds(new Set());
     else setSelectedRowIds(new Set(filteredData.map(r => r.id)));
@@ -280,16 +277,19 @@ export default function MetricDataPage() {
 
   const clearSelection = () => setSelectedRowIds(new Set());
 
-  const handleToggleDisable = () => {
+  const handleEnable = () => {
     setDisabledByMetric(prev => {
       const current = new Set(prev[selectedMetric.key] || []);
-      if (allSelectedDisabled) {
-        // Re-enable
-        selectedRowIds.forEach(id => current.delete(id));
-      } else {
-        // Disable
-        selectedRowIds.forEach(id => current.add(id));
-      }
+      selectedRowIds.forEach(id => current.delete(id));
+      return { ...prev, [selectedMetric.key]: current };
+    });
+    setSelectedRowIds(new Set());
+  };
+
+  const handleDisable = () => {
+    setDisabledByMetric(prev => {
+      const current = new Set(prev[selectedMetric.key] || []);
+      selectedRowIds.forEach(id => current.add(id));
       return { ...prev, [selectedMetric.key]: current };
     });
     setSelectedRowIds(new Set());
@@ -329,6 +329,27 @@ export default function MetricDataPage() {
             onChange={(e) => { e.stopPropagation(); toggleRow(ctx.row.original.id); }}
           />
         ),
+      },
+      // Status column
+      {
+        id: 'status',
+        header: 'Status',
+        size: 110,
+        enableSorting: false,
+        cell: (ctx: any) => {
+          const isRowDisabled = disabledIds.has(ctx.row.original.id);
+          return (
+            <div className="px-4 py-3 flex items-center">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-medium ${
+                isRowDisabled
+                  ? 'bg-red-50 text-red-700'
+                  : 'bg-green-50 text-green-700'
+              }`}>
+                {isRowDisabled ? 'Disabled' : 'Enabled'}
+              </span>
+            </div>
+          );
+        },
       },
       // Customer column
       {
@@ -510,18 +531,19 @@ export default function MetricDataPage() {
         )}
 
         {hasSelection ? (
-          // Selection mode: Disable/Enable button (replaces Edit metric)
+          // Selection mode: Enable + Disable buttons (no icons)
           <>
             <button
-              onClick={handleToggleDisable}
-              className={`flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium rounded-[8px] transition-colors ${
-                allSelectedDisabled
-                  ? 'text-white bg-blue-600 hover:bg-blue-700'
-                  : 'text-white bg-red-600 hover:bg-red-700'
-              }`}
+              onClick={handleEnable}
+              className="h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors"
             >
-              <Ban className="w-3.5 h-3.5" />
-              {allSelectedDisabled ? 'Enable' : 'Disable'}
+              Enable
+            </button>
+            <button
+              onClick={handleDisable}
+              className="h-9 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-[8px] bg-white hover:bg-red-50 transition-colors"
+            >
+              Disable
             </button>
             <span className="text-[13px] text-[#637083]">
               {selectedRowIds.size} selected
@@ -534,11 +556,16 @@ export default function MetricDataPage() {
             </button>
           </>
         ) : (
-          // Default mode: Edit metric button
-          <button className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
-            <Pencil className="w-3.5 h-3.5" />
-            Edit metric
-          </button>
+          // Default mode: Edit metric + Add metric
+          <>
+            <button className="h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
+              Edit metric
+            </button>
+            <button className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
+              <Plus className="w-3.5 h-3.5" />
+              Add metric
+            </button>
+          </>
         )}
 
         {/* Spacer */}
@@ -598,6 +625,11 @@ export default function MetricDataPage() {
               </Dropdown.Content>
             </Dropdown>
             <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
+
+            <button className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              Filter
+            </button>
           </>
         )}
       </div>
@@ -608,7 +640,7 @@ export default function MetricDataPage() {
           <GridView
             columns={columns}
             data={filteredData}
-            pinnedColumns={{ left: ['select', 'customer'], right: [] }}
+            pinnedColumns={{ left: ['select', 'status', 'customer'], right: [] }}
             enableColumnPinning={true}
             divclassName="h-full w-full overflow-auto"
             tableclassName="w-full"

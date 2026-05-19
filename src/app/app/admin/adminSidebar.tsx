@@ -27,8 +27,8 @@ const SECTIONS: NavSection[] = [
     id: 'data',
     label: 'Data',
     items: [
-      { label: 'Metrics',    href: '/app/admin/data/metric-data',    id: 'd_metrics' },
-      { label: 'Attributes', href: '/app/admin/data/attribute-data', id: 'd_attributes' },
+      { label: 'Customer Metrics',    href: '/app/admin/data/metric-data',    id: 'd_metrics' },
+      { label: 'Customer Attributes', href: '/app/admin/data/attribute-data', id: 'd_attributes' },
     ],
   },
 ];
