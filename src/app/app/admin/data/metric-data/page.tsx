@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useCallback } from 'react';
-import { Search, Download, Upload, ChevronDown, Check, X, PencilLine, Plus, SlidersHorizontal } from 'lucide-react';
+import { Search, Download, Upload, ChevronDown, Check, X, PencilLine, Plus, SlidersHorizontal, Info, Target as TargetIcon, UploadCloud } from 'lucide-react';
 import GridView from '../../../../../common/components/GridView';
 import { Dropdown } from '../../../../../common/Dropdown';
+import { useGridView, type GridViewState } from '../../../../../common/hooks/useGridView';
+import { ViewChip, ColumnManager } from '../../../../../common/components/GridViewToggle';
+import AddMetricModal, { type NewMetricInput } from './AddMetricModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,13 +51,18 @@ const METRICS: MetricDef[] = [
   { key: 'days_to_renewal',   label: 'Days to Renewal',           type: 'pipeline', unit: 'number'   },
 ];
 
+// Full set of available time periods. The default System View hides the later months;
+// users can show them from the column visibility dropdown.
 const TIME_PERIODS = [
-  { key: 'dec_2025', label: 'Dec 2025' },
-  { key: 'jan_2026', label: 'Jan 2026' },
-  { key: 'feb_2026', label: 'Feb 2026' },
-  { key: 'mar_2026', label: 'Mar 2026' },
-  { key: 'apr_2026', label: 'Apr 2026' },
-  { key: 'may_2026', label: 'May 2026' },
+  { key: 'dec_2025', label: 'Dec 2025', defaultVisible: true  },
+  { key: 'jan_2026', label: 'Jan 2026', defaultVisible: true  },
+  { key: 'feb_2026', label: 'Feb 2026', defaultVisible: true  },
+  { key: 'mar_2026', label: 'Mar 2026', defaultVisible: true  },
+  { key: 'apr_2026', label: 'Apr 2026', defaultVisible: true  },
+  { key: 'may_2026', label: 'May 2026', defaultVisible: false },
+  { key: 'jun_2026', label: 'Jun 2026', defaultVisible: false },
+  { key: 'jul_2026', label: 'Jul 2026', defaultVisible: false },
+  { key: 'aug_2026', label: 'Aug 2026', defaultVisible: false },
 ];
 
 const MOCK_CUSTOMERS = [
@@ -108,11 +116,24 @@ function seedValue(customerId: string, metricKey: string, periodIdx: number): st
   return String(Math.round(value * 10) / 10);
 }
 
+function seedTarget(metricKey: string): string {
+  // Target is roughly 110% of the first-period base value
+  const seed = METRIC_SEEDS[metricKey];
+  if (!seed) return '';
+  const baseTarget = seed.base * 1.1 + seed.spread * 0.5;
+  return String(Math.round(baseTarget * 10) / 10);
+}
+
 function buildInitialData(): Record<string, CustomerRow[]> {
   const result: Record<string, CustomerRow[]> = {};
   METRICS.forEach(m => {
     result[m.key] = MOCK_CUSTOMERS.map(c => {
-      const row: CustomerRow = { id: c.id, customer: c.name, segment: c.segment };
+      const row: CustomerRow = {
+        id: c.id,
+        customer: c.name,
+        segment: c.segment,
+        target: seedTarget(m.key),
+      };
       TIME_PERIODS.forEach((p, i) => {
         row[p.key] = seedValue(c.id, m.key, i);
       });
@@ -236,17 +257,55 @@ function UploadPreviewModal({
   );
 }
 
+// Standard view — organization default. Only Select + Customer are locked (frozen).
+// Status, Target, and the time periods are reorderable/draggable.
+// Later months are hidden by default; users can show them via the column manager.
+const SYSTEM_VIEW: GridViewState = {
+  columnOrder: ['select', 'customer', 'status', 'target', ...TIME_PERIODS.map(p => p.key)],
+  columnVisibility: {
+    status: true,
+    target: true,
+    ...Object.fromEntries(TIME_PERIODS.map(p => [p.key, p.defaultVisible])),
+  },
+  sorting: [],
+  columnSizing: {},
+  filters: {},
+};
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function MetricDataPage() {
+  // `cleanData` is the last published snapshot; `allData` includes pending edits.
+  // Diffing the two surfaces which cells are dirty and the count for the publish banner.
+  const [cleanData, setCleanData] = useState<Record<string, CustomerRow[]>>(INITIAL_DATA);
   const [allData, setAllData] = useState<Record<string, CustomerRow[]>>(INITIAL_DATA);
+  const [metricList, setMetricList] = useState<MetricDef[]>(METRICS);
   const [selectedMetric, setSelectedMetric] = useState<MetricDef>(METRICS[0]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [disabledByMetric, setDisabledByMetric] = useState<Record<string, Set<string>>>({});
   const [editingCell, setEditingCell] = useState<{ rowId: string; colKey: string } | null>(null);
   const [uploadPreview, setUploadPreview] = useState<UploadPreview | null>(null);
+  const [showAddMetricModal, setShowAddMetricModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Standard vs Personal view (ICA-2232). User is treated as a Configurator.
+  const {
+    currentView,
+    isPersonal,
+    hasPersonalView,
+    isConfigurator,
+    showFirstTimeWarning,
+    updatePersonal,
+    setView,
+    resetPersonal,
+    saveAsStandard,
+    dismissWarning,
+  } = useGridView('admin.metrics', SYSTEM_VIEW, { isConfigurator: true });
+
+  // Search term is part of the saved view ("filters").
+  const searchTerm = (currentView.filters?.search as string) ?? '';
+  const setSearchTerm = (next: string) =>
+    updatePersonal({ filters: { ...currentView.filters, search: next } });
 
   const tableData = allData[selectedMetric.key] || [];
   const disabledIds = disabledByMetric[selectedMetric.key] || new Set<string>();
@@ -305,6 +364,98 @@ export default function MetricDataPage() {
       }));
     },
     [selectedMetric.key]
+  );
+
+  // ── Dirty cells (unpublished changes) ──────────────────────────────────────
+  // A cell is dirty when its value in `allData` differs from `cleanData`.
+  const dirtyCellKeys = useMemo(() => {
+    const keys = new Set<string>();
+    let total = 0;
+    Object.keys(allData).forEach(metricKey => {
+      const liveRows = allData[metricKey];
+      const cleanRows = cleanData[metricKey] || [];
+      liveRows.forEach(liveRow => {
+        const cleanRow = cleanRows.find(r => r.id === liveRow.id);
+        if (!cleanRow) return;
+        Object.keys(liveRow).forEach(field => {
+          if (field === 'id' || field === 'customer' || field === 'segment') return;
+          if (liveRow[field] !== cleanRow[field]) {
+            total += 1;
+            if (metricKey === selectedMetric.key) {
+              keys.add(`${liveRow.id}:${field}`);
+            }
+          }
+        });
+      });
+    });
+    return { keys, total };
+  }, [allData, cleanData, selectedMetric.key]);
+
+  const isCellDirty = useCallback(
+    (rowId: string, colKey: string) => dirtyCellKeys.keys.has(`${rowId}:${colKey}`),
+    [dirtyCellKeys]
+  );
+
+  const handlePublish = () => {
+    setCleanData(allData);
+  };
+
+  const handleDiscardChanges = () => {
+    setAllData(cleanData);
+  };
+
+  // ── Add metric ─────────────────────────────────────────────────────────────
+  const handleAddMetric = (input: NewMetricInput) => {
+    const key = input.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const newMetric: MetricDef = {
+      key,
+      label: input.name,
+      type: 'manual',
+      unit: input.type === 'multi-select' ? 'number' : (input.type as 'currency' | 'number' | 'percent'),
+    };
+    if (metricList.some(m => m.key === key)) {
+      // eslint-disable-next-line no-alert
+      alert(`A metric with the key "${key}" already exists. Choose a different name.`);
+      return;
+    }
+
+    // Resolve which customers this metric applies to.
+    let targetIds: Set<string>;
+    if (input.applyTo === 'all') {
+      targetIds = new Set(MOCK_CUSTOMERS.map(c => c.id));
+    } else if (input.applyTo === 'segment') {
+      targetIds = new Set(
+        MOCK_CUSTOMERS.filter(c => c.segment === input.segmentName).map(c => c.id)
+      );
+    } else {
+      targetIds = new Set(input.customerIds ?? []);
+    }
+
+    const rows: CustomerRow[] = MOCK_CUSTOMERS.map(c => {
+      const row: CustomerRow = {
+        id: c.id,
+        customer: c.name,
+        segment: c.segment,
+        target: '',
+      };
+      const isApplied = targetIds.has(c.id);
+      TIME_PERIODS.forEach(p => {
+        row[p.key] = isApplied ? (input.type === 'multi-select' ? (input.options?.[0] ?? '') : '0') : '';
+      });
+      return row;
+    });
+
+    setMetricList(prev => [...prev, newMetric]);
+    setAllData(prev => ({ ...prev, [key]: rows }));
+    setCleanData(prev => ({ ...prev, [key]: rows })); // newly added metric starts clean
+    setSelectedMetric(newMetric);
+    setShowAddMetricModal(false);
+  };
+
+  // Segments available for the "Segment based" applyTo option in the new-metric drawer.
+  const AVAILABLE_SEGMENTS = useMemo(
+    () => Array.from(new Set(MOCK_CUSTOMERS.map(c => c.segment))).concat(['High-Ticket Customers']),
+    []
   );
 
   const columns = useMemo(() => {
@@ -368,6 +519,55 @@ export default function MetricDataPage() {
           );
         },
       },
+      // Target column — per-customer, per-metric threshold
+      {
+        id: 'target',
+        header: 'Target',
+        accessorKey: 'target',
+        size: 130,
+        cell: (ctx: any) => {
+          const rowId = ctx.row.original.id as string;
+          const isRowDisabled = disabledIds.has(rowId);
+          const cellEditable = isManual && !isRowDisabled;
+          const isEditing = cellEditable && editingCell?.rowId === rowId && editingCell?.colKey === 'target';
+          const rawValue = ctx.getValue() as string;
+          const dirty = isCellDirty(rowId, 'target');
+
+          if (isEditing) {
+            return (
+              <input
+                autoFocus
+                defaultValue={rawValue}
+                className="w-full h-full px-4 py-2 text-[14px] border-none outline-none bg-blue-50 text-[#141C24] focus:ring-2 focus:ring-inset focus:ring-blue-400"
+                onBlur={(e) => { handleCellEdit(rowId, 'target', e.target.value); setEditingCell(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') (e.currentTarget as HTMLInputElement).blur(); }}
+              />
+            );
+          }
+          return (
+            <div
+              className={`relative px-4 py-3 text-[14px] h-full group flex items-center gap-1.5 ${
+                isRowDisabled
+                  ? 'text-[#9CA3AF] cursor-not-allowed'
+                  : cellEditable
+                  ? 'text-[#141C24] cursor-text hover:bg-blue-50/60'
+                  : 'text-[#141C24]'
+              }`}
+              onClick={() => cellEditable && setEditingCell({ rowId, colKey: 'target' })}
+            >
+              {dirty
+                ? <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                : <TargetIcon className="w-3 h-3 text-[#9CA3AF] shrink-0" />}
+              <span>{formatValue(rawValue, selectedMetric)}</span>
+              {cellEditable && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-60 transition-opacity">
+                  <PencilLine className="w-3 h-3 text-[#637083]" />
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
       // Time period columns
       ...TIME_PERIODS.map(period => ({
         id: period.key,
@@ -380,6 +580,7 @@ export default function MetricDataPage() {
           const cellEditable = isManual && !isRowDisabled;
           const isEditing = cellEditable && editingCell?.rowId === rowId && editingCell?.colKey === period.key;
           const rawValue = ctx.getValue() as string;
+          const dirty = isCellDirty(rowId, period.key);
 
           if (isEditing) {
             return (
@@ -402,7 +603,7 @@ export default function MetricDataPage() {
 
           return (
             <div
-              className={`relative px-4 py-3 text-[14px] h-full group ${
+              className={`relative px-4 py-3 text-[14px] h-full group flex items-center gap-1.5 ${
                 isRowDisabled
                   ? 'text-[#9CA3AF] cursor-not-allowed'
                   : cellEditable
@@ -411,7 +612,8 @@ export default function MetricDataPage() {
               }`}
               onClick={() => cellEditable && setEditingCell({ rowId, colKey: period.key })}
             >
-              {formatValue(rawValue, selectedMetric)}
+              {dirty && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+              <span>{formatValue(rawValue, selectedMetric)}</span>
               {cellEditable && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-60 transition-opacity">
                   <PencilLine className="w-3 h-3 text-[#637083]" />
@@ -422,7 +624,7 @@ export default function MetricDataPage() {
         },
       })),
     ];
-  }, [selectedMetric, editingCell, handleCellEdit, allSelected, someSelected, selectedRowIds, disabledIds, toggleAll, toggleRow]);
+  }, [selectedMetric, editingCell, handleCellEdit, allSelected, someSelected, selectedRowIds, disabledIds, toggleAll, toggleRow, isCellDirty]);
 
   // ── Download ────────────────────────────────────────────────────────────────
   const handleDownload = (format: 'csv' | 'xlsx') => {
@@ -465,13 +667,96 @@ export default function MetricDataPage() {
     e.target.value = '';
   };
 
+  // Columns the column manager will offer for show/hide + reorder.
+  const columnDescriptors = useMemo(
+    () => [
+      { id: 'select',   label: 'Selection', pinned: true },
+      { id: 'customer', label: 'Customer',  pinned: true },
+      { id: 'status',   label: 'Status' },
+      { id: 'target',   label: 'Target' },
+      ...TIME_PERIODS.map(p => ({ id: p.key, label: p.label })),
+    ],
+    []
+  );
+
+  // Filter the columns we pass to GridView based on visibility (pinned columns
+  // are always visible regardless of toggle state).
+  const visibleColumns = useMemo(() => {
+    const visibility = currentView.columnVisibility ?? {};
+    return columns.filter(c => {
+      const id = c.id as string;
+      if (id === 'select' || id === 'customer') return true;
+      return visibility[id] !== false;
+    });
+  }, [columns, currentView.columnVisibility]);
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* ── Row 1: Title ───────────────────────────────────────────────────── */}
-      <div className="shrink-0 px-8 pt-6 pb-4">
+      {/* ── Draft banner (subtle info style) ──────────────────────────────── */}
+      {dirtyCellKeys.total > 0 && (
+        <div className="shrink-0 px-8 pt-4">
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-[8px]">
+            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+            <div className="flex-1 text-[13px] text-[#141C24]">
+              Your changes are saved as a draft. Only you can see them.
+            </div>
+            <button
+              onClick={handleDiscardChanges}
+              className="px-3 h-8 text-[13px] font-medium text-[#637083] border border-[#E4E7EC] bg-white rounded-[8px] hover:bg-[#F2F4F7] transition-colors"
+            >
+              Discard
+            </button>
+            <button
+              onClick={handlePublish}
+              className="px-3 h-8 text-[13px] font-medium text-white bg-blue-600 rounded-[8px] hover:bg-blue-700 transition-colors"
+            >
+              Publish to all
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Row 1: Title + view chip + column settings ───────────────────── */}
+      <div className="shrink-0 px-8 pt-6 pb-4 flex items-center gap-3">
         <h1 className="text-[20px] font-bold text-[#141C24] leading-none">Metrics</h1>
+        <ViewChip
+          isPersonal={isPersonal}
+          hasPersonalView={hasPersonalView}
+          isConfigurator={isConfigurator}
+          onChangeView={setView}
+          onResetPersonal={resetPersonal}
+          onSaveAsStandard={saveAsStandard}
+        />
+        <ColumnManager
+          iconOnly
+          columns={columnDescriptors}
+          columnOrder={currentView.columnOrder}
+          columnVisibility={currentView.columnVisibility}
+          onColumnOrderChange={(next) => updatePersonal({ columnOrder: next })}
+          onColumnVisibilityChange={(next) => updatePersonal({ columnVisibility: next })}
+        />
       </div>
+
+      {/* First-time auto-transition warning */}
+      {showFirstTimeWarning && (
+        <div className="shrink-0 px-8 pb-3">
+          <div className="flex items-start gap-3 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-[8px]">
+            <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+            <div className="flex-1 text-[13px] text-blue-900 leading-snug">
+              We saved your change to a <strong>Personal view</strong>. You can switch back to the
+              Standard view anytime from the chip next to the title.
+            </div>
+            <button
+              onClick={dismissWarning}
+              className="text-blue-700 hover:text-blue-900 shrink-0"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Row 2: Action bar ─────────────────────────────────────────────── */}
       <div className="shrink-0 px-8 pb-4 flex items-center gap-3 flex-wrap">
@@ -509,7 +794,7 @@ export default function MetricDataPage() {
               placement="bottom"
               className="absolute top-full left-0 z-50 mt-1 bg-white border border-[#E4E7EC] rounded-[8px] shadow-lg py-1 min-w-[260px] max-h-[360px] overflow-y-auto"
             >
-              {METRICS.map(m => (
+              {metricList.map(m => (
                 <button
                   key={m.key}
                   onClick={() => { setSelectedMetric(m); setEditingCell(null); }}
@@ -561,7 +846,10 @@ export default function MetricDataPage() {
             <button className="h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
               Edit metric
             </button>
-            <button className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
+            <button
+              onClick={() => setShowAddMetricModal(true)}
+              className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors"
+            >
               <Plus className="w-3.5 h-3.5" />
               Add metric
             </button>
@@ -638,9 +926,9 @@ export default function MetricDataPage() {
       <div className="flex-1 min-h-0 px-8 pb-4">
         <div className="h-full border border-[#E4E7EC] rounded-[8px] overflow-hidden">
           <GridView
-            columns={columns}
+            columns={visibleColumns}
             data={filteredData}
-            pinnedColumns={{ left: ['select', 'status', 'customer'], right: [] }}
+            pinnedColumns={{ left: ['select', 'customer'], right: [] }}
             enableColumnPinning={true}
             divclassName="h-full w-full overflow-auto"
             tableclassName="w-full"
@@ -649,6 +937,12 @@ export default function MetricDataPage() {
             tdclassName="p-0 text-[14px]"
             rowHeight={48}
             emptyPlaceHolderForTable="No customers match your search"
+            sorting={currentView.sorting}
+            onSortingChange={(next) => updatePersonal({ sorting: next })}
+            columnSizing={currentView.columnSizing}
+            onColumnSizingChange={(next) => updatePersonal({ columnSizing: next })}
+            columnOrder={currentView.columnOrder}
+            onColumnOrderChange={(next) => updatePersonal({ columnOrder: next })}
           />
         </div>
       </div>
@@ -657,8 +951,35 @@ export default function MetricDataPage() {
       {uploadPreview && (
         <UploadPreviewModal
           preview={uploadPreview}
-          onConfirm={() => setUploadPreview(null)}
+          onConfirm={() => {
+            // Apply all preview changes to `allData` so they show up as dirty cells.
+            setAllData(prev => {
+              const next = { ...prev };
+              const rows = (next[selectedMetric.key] || []).map(r => ({ ...r }));
+              uploadPreview.changedRows.forEach(change => {
+                const row = rows.find(r => r.customer === change.customer);
+                const period = TIME_PERIODS.find(p => p.label === change.period);
+                if (!row || !period) return;
+                // Strip $, % and , from formatted strings
+                const numeric = change.newVal.replace(/[$,%\s]/g, '');
+                row[period.key] = numeric;
+              });
+              next[selectedMetric.key] = rows;
+              return next;
+            });
+            setUploadPreview(null);
+          }}
           onCancel={() => setUploadPreview(null)}
+        />
+      )}
+
+      {/* Add metric drawer */}
+      {showAddMetricModal && (
+        <AddMetricModal
+          customers={MOCK_CUSTOMERS.map(c => ({ id: c.id, name: c.name }))}
+          segments={AVAILABLE_SEGMENTS}
+          onCancel={() => setShowAddMetricModal(false)}
+          onSubmit={handleAddMetric}
         />
       )}
     </div>

@@ -9,7 +9,10 @@ import {
   flexRender,
   ColumnPinningState,
   ColumnSizingState,
-  Header
+  SortingState,
+  ColumnOrderState,
+  Header,
+  Updater
 } from '@tanstack/react-table';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -76,6 +79,13 @@ interface GridViewProps {
   isFetchingNextPage?: boolean;
   totalRows?: number;
   rowHeight?: number;
+  // Controlled view state (optional). Provide to lift state for system/custom view persistence.
+  sorting?: SortingState;
+  onSortingChange?: (next: SortingState) => void;
+  columnSizing?: ColumnSizingState;
+  onColumnSizingChange?: (next: ColumnSizingState) => void;
+  columnOrder?: ColumnOrderState;
+  onColumnOrderChange?: (next: ColumnOrderState) => void;
 }
 
 const GridView = ({
@@ -99,23 +109,57 @@ const GridView = ({
   isFetchingNextPage = false,
   totalRows,
   rowHeight = 40,
+  sorting,
+  onSortingChange,
+  columnSizing: controlledColumnSizing,
+  onColumnSizingChange,
+  columnOrder,
+  onColumnOrderChange,
 }: GridViewProps) => {
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(
     pinnedColumns || { left: [], right: [] }
   );
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [internalSizing, setInternalSizing] = useState<ColumnSizingState>({});
+  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
+  const [internalOrder, setInternalOrder] = useState<ColumnOrderState>([]);
+
+  const effSizing = controlledColumnSizing !== undefined ? controlledColumnSizing : internalSizing;
+  const effSorting = sorting !== undefined ? sorting : internalSorting;
+  const effOrder = columnOrder !== undefined ? columnOrder : internalOrder;
+
+  const handleSizingChange = (updater: Updater<ColumnSizingState>) => {
+    const next = typeof updater === 'function' ? (updater as any)(effSizing) : updater;
+    if (onColumnSizingChange) onColumnSizingChange(next);
+    if (controlledColumnSizing === undefined) setInternalSizing(next);
+  };
+
+  const handleSortingChange = (updater: Updater<SortingState>) => {
+    const next = typeof updater === 'function' ? (updater as any)(effSorting) : updater;
+    if (onSortingChange) onSortingChange(next);
+    if (sorting === undefined) setInternalSorting(next);
+  };
+
+  const handleOrderChange = (updater: Updater<ColumnOrderState>) => {
+    const next = typeof updater === 'function' ? (updater as any)(effOrder) : updater;
+    if (onColumnOrderChange) onColumnOrderChange(next);
+    if (columnOrder === undefined) setInternalOrder(next);
+  };
 
   const table = useReactTable({
     columns,
     data: data || [],
     state: {
       columnPinning,
-      columnSizing
+      columnSizing: effSizing,
+      sorting: effSorting,
+      columnOrder: effOrder,
     },
     onColumnPinningChange: setColumnPinning,
-    onColumnSizingChange: setColumnSizing,
+    onColumnSizingChange: handleSizingChange,
+    onSortingChange: handleSortingChange,
+    onColumnOrderChange: handleOrderChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     enableSortingRemoval: true,
