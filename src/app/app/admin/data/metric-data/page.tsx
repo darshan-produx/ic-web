@@ -274,6 +274,20 @@ const SYSTEM_VIEW: GridViewState = {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+// Mock current user for edit attribution (real impl would come from auth context).
+const CURRENT_USER_NAME = 'Rajan Dubey';
+
+interface CellEditMeta {
+  modifiedBy: string;
+  modifiedAt: number; // ms timestamp
+}
+
+function formatEditDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+}
+
 export default function MetricDataPage() {
   // `cleanData` is the last published snapshot; `allData` includes pending edits.
   // Diffing the two surfaces which cells are dirty and the count for the publish banner.
@@ -286,6 +300,10 @@ export default function MetricDataPage() {
   const [editingCell, setEditingCell] = useState<{ rowId: string; colKey: string } | null>(null);
   const [uploadPreview, setUploadPreview] = useState<UploadPreview | null>(null);
   const [showAddMetricModal, setShowAddMetricModal] = useState(false);
+  // Per-cell edit attribution: who modified, and when. Keyed by `${metric}:${row}:${col}`.
+  const [cellEdits, setCellEdits] = useState<Record<string, CellEditMeta>>({});
+  // Toggle to hide rows that have no dirty cells (only meaningful when there are drafts).
+  const [showOnlyUpdated, setShowOnlyUpdated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Standard vs Personal view (ICA-2232). User is treated as a Configurator.
@@ -311,11 +329,34 @@ export default function MetricDataPage() {
   const disabledIds = disabledByMetric[selectedMetric.key] || new Set<string>();
   const hasSelection = selectedRowIds.size > 0;
 
+  // Precompute set of row ids that have at least one dirty cell on the active metric.
+  const dirtyRowIds = useMemo(() => {
+    const ids = new Set<string>();
+    const liveRows = allData[selectedMetric.key] || [];
+    const cleanRows = cleanData[selectedMetric.key] || [];
+    liveRows.forEach(liveRow => {
+      const cleanRow = cleanRows.find(r => r.id === liveRow.id);
+      if (!cleanRow) return;
+      const hasDirty = Object.keys(liveRow).some(field => {
+        if (field === 'id' || field === 'customer' || field === 'segment') return false;
+        return liveRow[field] !== cleanRow[field];
+      });
+      if (hasDirty) ids.add(liveRow.id);
+    });
+    return ids;
+  }, [allData, cleanData, selectedMetric.key]);
+
   const filteredData = useMemo(() => {
-    if (!searchTerm.trim()) return tableData;
-    const q = searchTerm.toLowerCase();
-    return tableData.filter(row => row.customer.toLowerCase().includes(q));
-  }, [tableData, searchTerm]);
+    let rows = tableData;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      rows = rows.filter(row => row.customer.toLowerCase().includes(q));
+    }
+    if (showOnlyUpdated) {
+      rows = rows.filter(row => dirtyRowIds.has(row.id));
+    }
+    return rows;
+  }, [tableData, searchTerm, showOnlyUpdated, dirtyRowIds]);
 
   const allSelected = filteredData.length > 0 && filteredData.every(r => selectedRowIds.has(r.id));
   const someSelected = filteredData.some(r => selectedRowIds.has(r.id)) && !allSelected;
@@ -362,8 +403,31 @@ export default function MetricDataPage() {
           row.id === rowId ? { ...row, [colKey]: newValue } : row
         ),
       }));
+      // Stamp the edit so the tooltip can show who/when.
+      setCellEdits(prev => ({
+        ...prev,
+        [`${selectedMetric.key}:${rowId}:${colKey}`]: {
+          modifiedBy: CURRENT_USER_NAME,
+          modifiedAt: Date.now(),
+        },
+      }));
     },
     [selectedMetric.key]
+  );
+
+  // Lookup helpers for the dirty-cell tooltip.
+  const getCellEditMeta = useCallback(
+    (rowId: string, colKey: string): CellEditMeta | undefined =>
+      cellEdits[`${selectedMetric.key}:${rowId}:${colKey}`],
+    [cellEdits, selectedMetric.key]
+  );
+
+  const getCleanValue = useCallback(
+    (rowId: string, colKey: string): string | undefined => {
+      const cleanRows = cleanData[selectedMetric.key] || [];
+      return cleanRows.find(r => r.id === rowId)?.[colKey];
+    },
+    [cleanData, selectedMetric.key]
   );
 
   // ── Dirty cells (unpublished changes) ──────────────────────────────────────
@@ -398,10 +462,14 @@ export default function MetricDataPage() {
 
   const handlePublish = () => {
     setCleanData(allData);
+    setCellEdits({});
+    setShowOnlyUpdated(false);
   };
 
   const handleDiscardChanges = () => {
     setAllData(cleanData);
+    setCellEdits({});
+    setShowOnlyUpdated(false);
   };
 
   // ── Add metric ─────────────────────────────────────────────────────────────
@@ -544,6 +612,8 @@ export default function MetricDataPage() {
               />
             );
           }
+          const meta = dirty ? getCellEditMeta(rowId, 'target') : undefined;
+          const oldVal = dirty ? getCleanValue(rowId, 'target') : undefined;
           return (
             <div
               className={`relative px-4 py-3 text-[14px] h-full group flex items-center gap-1.5 ${
@@ -563,6 +633,12 @@ export default function MetricDataPage() {
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-60 transition-opacity">
                   <PencilLine className="w-3 h-3 text-[#637083]" />
                 </span>
+              )}
+              {dirty && meta && oldVal != null && (
+                <div className="hidden group-hover:block absolute top-full left-3 mt-1 z-[60] bg-[#1F2937] text-white text-[11px] leading-snug px-3 py-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
+                  <div>Old Value: {formatValue(oldVal, selectedMetric)}</div>
+                  <div className="opacity-90">Modified by, {meta.modifiedBy} on {formatEditDate(meta.modifiedAt)}</div>
+                </div>
               )}
             </div>
           );
@@ -601,6 +677,8 @@ export default function MetricDataPage() {
             );
           }
 
+          const meta = dirty ? getCellEditMeta(rowId, period.key) : undefined;
+          const oldVal = dirty ? getCleanValue(rowId, period.key) : undefined;
           return (
             <div
               className={`relative px-4 py-3 text-[14px] h-full group flex items-center gap-1.5 ${
@@ -619,12 +697,18 @@ export default function MetricDataPage() {
                   <PencilLine className="w-3 h-3 text-[#637083]" />
                 </span>
               )}
+              {dirty && meta && oldVal != null && (
+                <div className="hidden group-hover:block absolute top-full left-3 mt-1 z-[60] bg-[#1F2937] text-white text-[11px] leading-snug px-3 py-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
+                  <div>Old Value: {formatValue(oldVal, selectedMetric)}</div>
+                  <div className="opacity-90">Modified by, {meta.modifiedBy} on {formatEditDate(meta.modifiedAt)}</div>
+                </div>
+              )}
             </div>
           );
         },
       })),
     ];
-  }, [selectedMetric, editingCell, handleCellEdit, allSelected, someSelected, selectedRowIds, disabledIds, toggleAll, toggleRow, isCellDirty]);
+  }, [selectedMetric, editingCell, handleCellEdit, allSelected, someSelected, selectedRowIds, disabledIds, toggleAll, toggleRow, isCellDirty, getCellEditMeta, getCleanValue]);
 
   // ── Download ────────────────────────────────────────────────────────────────
   const handleDownload = (format: 'csv' | 'xlsx') => {
@@ -862,6 +946,35 @@ export default function MetricDataPage() {
         {/* Right-side actions only when nothing is selected */}
         {!hasSelection && (
           <>
+            {/* "Show only updated row" toggle — disabled when there are no drafts */}
+            {(() => {
+              const hasDrafts = dirtyCellKeys.total > 0;
+              return (
+                <label
+                  className={`flex items-center gap-2 select-none ${hasDrafts ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                  title={hasDrafts ? '' : 'No unpublished changes yet'}
+                >
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showOnlyUpdated}
+                    disabled={!hasDrafts}
+                    onClick={() => hasDrafts && setShowOnlyUpdated(v => !v)}
+                    className={`relative w-[34px] h-[20px] rounded-full transition-colors ${
+                      showOnlyUpdated && hasDrafts ? 'bg-blue-600' : 'bg-[#D0D5DD]'
+                    } ${!hasDrafts ? 'cursor-not-allowed' : ''}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        showOnlyUpdated && hasDrafts ? 'translate-x-[14px]' : ''
+                      }`}
+                    />
+                  </button>
+                  <span className="text-[13px] text-[#141C24]">Show only updated row</span>
+                </label>
+              );
+            })()}
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
               <input
@@ -952,7 +1065,10 @@ export default function MetricDataPage() {
         <UploadPreviewModal
           preview={uploadPreview}
           onConfirm={() => {
-            // Apply all preview changes to `allData` so they show up as dirty cells.
+            // Apply all preview changes to `allData` so they show up as dirty cells,
+            // and stamp each affected cell with edit metadata for the hover tooltip.
+            const now = Date.now();
+            const stamps: Record<string, CellEditMeta> = {};
             setAllData(prev => {
               const next = { ...prev };
               const rows = (next[selectedMetric.key] || []).map(r => ({ ...r }));
@@ -960,13 +1076,17 @@ export default function MetricDataPage() {
                 const row = rows.find(r => r.customer === change.customer);
                 const period = TIME_PERIODS.find(p => p.label === change.period);
                 if (!row || !period) return;
-                // Strip $, % and , from formatted strings
                 const numeric = change.newVal.replace(/[$,%\s]/g, '');
                 row[period.key] = numeric;
+                stamps[`${selectedMetric.key}:${row.id}:${period.key}`] = {
+                  modifiedBy: CURRENT_USER_NAME,
+                  modifiedAt: now,
+                };
               });
               next[selectedMetric.key] = rows;
               return next;
             });
+            setCellEdits(prev => ({ ...prev, ...stamps }));
             setUploadPreview(null);
           }}
           onCancel={() => setUploadPreview(null)}
