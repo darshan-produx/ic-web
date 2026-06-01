@@ -801,25 +801,32 @@ export default function MetricDataPage() {
         </div>
       )}
 
-      {/* ── Row 1: Title + view chip + column settings ───────────────────── */}
+      {/* ── Row 1: Title + column settings + view toggle ─────────────────── */}
       <div className="shrink-0 px-8 pt-6 pb-4 flex items-center gap-3">
         <h1 className="text-[20px] font-bold text-[#141C24] leading-none">Metrics</h1>
-        <ViewChip
-          isPersonal={isPersonal}
-          hasPersonalView={hasPersonalView}
-          isConfigurator={isConfigurator}
-          onChangeView={setView}
-          onResetPersonal={resetPersonal}
-          onSaveAsStandard={saveAsStandard}
-        />
-        <ColumnManager
-          iconOnly
-          columns={columnDescriptors}
-          columnOrder={currentView.columnOrder}
-          columnVisibility={currentView.columnVisibility}
-          onColumnOrderChange={(next) => updatePersonal({ columnOrder: next })}
-          onColumnVisibilityChange={(next) => updatePersonal({ columnVisibility: next })}
-        />
+        <div className="ml-auto flex items-center gap-2">
+          <ColumnManager
+            iconOnly
+            columns={columnDescriptors}
+            columnOrder={currentView.columnOrder}
+            columnVisibility={currentView.columnVisibility}
+            onColumnOrderChange={(next) => updatePersonal({ columnOrder: next })}
+            onColumnVisibilityChange={(next) => updatePersonal({ columnVisibility: next })}
+            isPersonal={isPersonal}
+            hasPersonalView={hasPersonalView}
+            isConfigurator={isConfigurator}
+            onResetPersonal={resetPersonal}
+            onSaveAsStandard={saveAsStandard}
+          />
+          <ViewChip
+            isPersonal={isPersonal}
+            hasPersonalView={hasPersonalView}
+            isConfigurator={isConfigurator}
+            onChangeView={setView}
+            onResetPersonal={resetPersonal}
+            onSaveAsStandard={saveAsStandard}
+          />
+        </div>
       </div>
 
       {/* First-time auto-transition warning */}
