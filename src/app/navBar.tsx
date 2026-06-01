@@ -58,14 +58,14 @@ const Header = () => {
           >
             <div className="layout-width">
               <div
-                className={`flex items-center px-4 mx-auto bg-topbar  group-data-[topbar=dark]:bg-topbar-dark group-data-[topbar=dark]:border-topbar-dark group-data-[topbar=brand]:bg-topbar-brand group-data-[topbar=brand]:border-topbar-brand ${pathname.includes('tasks') ? 'shadow-md' : 'shadow-md'
+                className={`flex items-center px-4 mx-auto bg-white  group-data-[topbar=dark]:bg-topbar-dark group-data-[topbar=dark]:border-topbar-dark group-data-[topbar=brand]:bg-topbar-brand group-data-[topbar=brand]:border-topbar-brand ${pathname.includes('tasks') ? 'shadow-md' : 'shadow-md'
                   }  h-[3.375rem] shadow-slate-200/50 group-data-[navbar=bordered]:rounded-md group-data-[navbar=bordered]:group-[.is-sticky]/topbar:rounded-t-none group-data-[topbar=dark]:dark:bg-zink-700 group-data-[topbar=dark]:dark:border-zink-700 dark:shadow-none group-data-[topbar=dark]:group-[.is-sticky]/topbar:dark:shadow-zink-500 group-data-[topbar=dark]:group-[.is-sticky]/topbar:dark:shadow-md group-data-[navbar=bordered]:shadow-none group-data-[layout=horizontal]:group-data-[navbar=bordered]:rounded-b-none group-data-[layout=horizontal]:shadow-none group-data-[layout=horizontal]:dark:group-[.is-sticky]/topbar:shadow-none`}
               >
                 <div className="flex max-w-[1200px]  mx-auto items-center w-full group-data-[layout=horizontal]:mx-auto group-data-[layout=horizontal]:max-w-screen-2xl navbar-header group-data-[layout=horizontal]:ltr:xl:pr-3 group-data-[layout=horizontal]:rtl:xl:pl-3">
                   <div className="items-center justify-center hidden px-5 text-center h-[3.375rem] group-data-[layout=horizontal]:md:flex group-data-[layout=horizontal]:ltr::pl-0 group-data-[layout=horizontal]:rtl:pr-0"></div>
 
                   <div>
-                    <MainLogo className="h-10 mx-auto" width={`135`} />
+                    <MainLogo className="h-11 mx-auto" width={`180`} />
                   </div>
                   <div className="flex gap-3 ms-auto w-full justify-center">
                     <div className="flex text-center text-sm py-4 gap-[15px]">

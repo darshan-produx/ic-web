@@ -206,7 +206,9 @@ export const PriorityFeedCard = ({ item, onPin, onDismiss, onCreateTask, onRemov
 
   const cat           = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.signal_pattern;
   const isCelebration = !!item.celebration_type;
-  const href = item.collection_type === 'signal'
+  const href = item.category === 'signal_pattern'
+    ? `/app/patterns/${item._id}`
+    : item.collection_type === 'signal'
     ? `/app/customers/${item.customer_id}?activeTab=open_issues`
     : `/app/insights/opportunities?selected=${item._id}`;
   const valueLabel = formatINR(item.value_at_stake);
