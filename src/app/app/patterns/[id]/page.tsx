@@ -3,9 +3,15 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  ChevronLeft, Check, MessageSquare, ChevronDown, ChevronUp,
-  Plus, Sparkles,
+  ChevronLeft, ChevronDown, ChevronUp,
+  Plus, Sparkles, Pencil, GitFork, SquareCheck, NotebookPen, EyeOff, Eye,
 } from 'lucide-react';
+import {
+  EditPatternModal,
+  SplitPatternModal,
+  ReclassifyModal,
+} from '../PatternActionModals';
+import type { Pattern } from '../PatternsGridView';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,12 +188,39 @@ function NewVsClosedChart({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PatternDetailPage() {
+  const [title, setTitle] = useState(PATTERN.title);
+  const [description, setDescription] = useState(PATTERN.description);
+  const [trackingEnabled, setTrackingEnabled] = useState(true);
+  const [activeAction, setActiveAction] = useState<'rename' | 'split' | 'reclassify' | null>(null);
+  const [splitMessage, setSplitMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  };
   const [updates, setUpdates] = useState<Update[]>(PATTERN.updates);
   const [newUpdate, setNewUpdate] = useState('');
   const [showUpdateInput, setShowUpdateInput] = useState(false);
   const [affectedExpanded, setAffectedExpanded] = useState(true);
   const [sortKey, setSortKey] = useState<keyof Pick<AffectedCustomer, 'openSignals' | 'totalSignals' | 'avgIntensity' | 'revenueAtRisk'>>('openSignals');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Build a minimal Pattern shape so the shared modals (RenamePatternModal,
+  // SplitPatternModal) work without needing a fresh data model on this page.
+  const patternForModals: Pattern = {
+    id: PATTERN.id,
+    trend: [],
+    title,
+    labels: [],
+    description,
+    openSignals: PATTERN.kpis.openSignals,
+    impactedCustomers: PATTERN.kpis.customersAffected,
+    createdBy: 'System',
+    assignedTo: PATTERN.assignees,
+    createdOn: PATTERN.createdOn,
+    trackingEnabled,
+  };
 
   const sortedAffected = useMemo(() => {
     return [...PATTERN.affected].sort((a, b) => {
@@ -244,25 +277,51 @@ export default function PatternDetailPage() {
 
   return (
     <div className="max-w-[1200px] mx-auto px-8 pt-6 pb-12">
-      {/* ── Top bar: Back + Edit ───────────────────────────────────────────── */}
+      {/* ── Top bar: Back ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-6">
         <Link
-          href="/app/priorities"
+          href="/app/patterns"
           className="flex items-center gap-1.5 text-[13px] font-medium text-[#637083] hover:text-[#141C24] transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
           Back
         </Link>
-        <button className="text-[13px] font-medium text-[#637083] hover:text-[#141C24] transition-colors">
-          Edit
-        </button>
       </div>
+
+      {/* Split success toast */}
+      {splitMessage && (
+        <div className="mb-4 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-[8px] flex items-center justify-between gap-3">
+          <p className="text-[13px] text-blue-900">{splitMessage}</p>
+          <button
+            onClick={() => setSplitMessage(null)}
+            className="text-[12px] font-medium text-blue-700 hover:text-blue-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Generic action toast (tracking toggle, reclassify confirmation, etc.) */}
+      {toast && (
+        <div className="mb-4 px-4 py-2.5 bg-[#F9FAFB] border border-[#E4E7EC] rounded-[8px] text-[13px] text-[#141C24] flex items-center justify-between gap-3">
+          <span>{toast}</span>
+          <button onClick={() => setToast(null)} className="text-[12px] font-medium text-[#637083] hover:text-[#141C24]">Dismiss</button>
+        </div>
+      )}
+
+      {/* Tracking disabled banner */}
+      {!trackingEnabled && (
+        <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-100 rounded-[8px] text-[13px] text-amber-900 flex items-center gap-2">
+          <EyeOff className="w-3.5 h-3.5 shrink-0" />
+          <span>Tracking is stopped. No new signals will be generated for this pattern until you re-enable tracking.</span>
+        </div>
+      )}
 
       {/* ── Title row + action buttons ──────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-6 mb-8">
         <div className="min-w-0 flex-1">
           <h1 className="text-[24px] font-bold text-[#141C24] leading-tight">
-            {PATTERN.title}
+            {title}
           </h1>
           <div className="mt-2 flex items-center gap-3 text-[13px] text-[#637083] flex-wrap">
             <span>{PATTERN.type}</span>
@@ -274,14 +333,43 @@ export default function PatternDetailPage() {
         </div>
 
         <div className="shrink-0 flex items-center gap-2">
-          <button className="w-9 h-9 flex items-center justify-center border border-[#E4E7EC] rounded-[8px] text-[#637083] hover:bg-[#F9FAFB] transition-colors" aria-label="Mark complete">
-            <Check className="w-4 h-4" />
+          <button
+            onClick={() => setActiveAction('rename')}
+            className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
           </button>
-          <button className="w-9 h-9 flex items-center justify-center border border-[#E4E7EC] rounded-[8px] text-[#637083] hover:bg-[#F9FAFB] transition-colors" aria-label="Comment">
-            <MessageSquare className="w-4 h-4" />
+          <button
+            onClick={() => setActiveAction('split')}
+            className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors"
+          >
+            <GitFork className="w-3.5 h-3.5" />
+            Fork
           </button>
-          <button className="h-9 px-4 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
-            Mark as resolved
+          <button
+            onClick={() => {
+              const next = !trackingEnabled;
+              setTrackingEnabled(next);
+              showToast(next
+                ? 'Tracking enabled. New signals will be classified into this pattern.'
+                : 'Tracking stopped. No new signals will be generated for this pattern.');
+            }}
+            className={`flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium border rounded-[8px] transition-colors ${
+              trackingEnabled
+                ? 'text-[#141C24] border-[#E4E7EC] bg-white hover:bg-[#F9FAFB]'
+                : 'text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100'
+            }`}
+          >
+            {trackingEnabled
+              ? <><EyeOff className="w-3.5 h-3.5" /> Stop tracking</>
+              : <><Eye className="w-3.5 h-3.5" /> Enable tracking</>}
+          </button>
+          <button className="w-9 h-9 flex items-center justify-center border border-[#E4E7EC] rounded-[8px] text-[#637083] hover:bg-[#F9FAFB] transition-colors" aria-label="Task">
+            <SquareCheck className="w-4 h-4" />
+          </button>
+          <button className="w-9 h-9 flex items-center justify-center border border-[#E4E7EC] rounded-[8px] text-[#637083] hover:bg-[#F9FAFB] transition-colors" aria-label="Notes">
+            <NotebookPen className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -443,6 +531,48 @@ export default function PatternDetailPage() {
           </div>
         </aside>
       </div>
+
+      {/* ── Rename / Split modals ─────────────────────────────────────────── */}
+      {activeAction === 'rename' && (
+        <EditPatternModal
+          pattern={patternForModals}
+          onCancel={() => setActiveAction(null)}
+          onSubmit={({ title: nextTitle, description: nextDescription }) => {
+            setTitle(nextTitle);
+            setDescription(nextDescription);
+            // Always offer reclassify after edit (per call-transcript flow).
+            setActiveAction('reclassify');
+          }}
+        />
+      )}
+
+      {activeAction === 'split' && (
+        <SplitPatternModal
+          pattern={patternForModals}
+          onCancel={() => setActiveAction(null)}
+          onSubmit={({ forks }) => {
+            const summary = forks.map(f => `"${f.title}"`).join(', ');
+            setSplitMessage(`Pattern forked into ${forks.length} new pattern${forks.length !== 1 ? 's' : ''}: ${summary}. Original remains; signals will be reclassified automatically.`);
+            // Always offer reclassify after fork.
+            setActiveAction('reclassify');
+          }}
+        />
+      )}
+
+      {activeAction === 'reclassify' && (
+        <ReclassifyModal
+          pattern={patternForModals}
+          prompt
+          onCancel={() => setActiveAction(null)}
+          onSkip={() => setActiveAction(null)}
+          onSubmit={(scope) => {
+            setActiveAction(null);
+            showToast(scope === 'this_pattern_only'
+              ? 'Reclassifying signals in this pattern…'
+              : 'Reclassifying signals in this pattern + unassigned signals…');
+          }}
+        />
+      )}
     </div>
   );
 }

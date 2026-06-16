@@ -36,6 +36,7 @@ const Header = () => {
         Priorities: true,
         Myteam: true,
         Customers: true,
+        Patterns: true,
         Opportunities: true,
         Emails: true,
         Meetings: true,
@@ -109,6 +110,20 @@ const Header = () => {
                               }
                             >
                               Customers
+                            </span>
+                          </Link>
+                        )}
+                      {navbarConfig?.data?.value?.Patterns &&
+                        myroles?.includes('USER') && (
+                          <Link href="/app/patterns">
+                            <span
+                              className={
+                                pathname.includes('/app/patterns')
+                                  ? 'border-b-2 pb-[17px] pt-3 px-[7.5px] relative top-[7px] border-gray-900 text-gray-900 cursor-pointer'
+                                  : 'text-gray-400 pb-[17px] pt-3 px-[7.5px] relative top-[7px] cursor-pointer'
+                              }
+                            >
+                              Patterns
                             </span>
                           </Link>
                         )}
