@@ -1,19 +1,20 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useCallback } from 'react';
-import { Search, Download, Upload, ChevronDown, Check, X, PencilLine, Plus, SlidersHorizontal, Info, Target as TargetIcon, UploadCloud } from 'lucide-react';
+import { Search, Download, Upload, ChevronDown, Check, X, PencilLine, Plus, SlidersHorizontal, Info, Target as TargetIcon, UploadCloud, Layers } from 'lucide-react';
 import GridView from '../../../../../common/components/GridView';
 import { Dropdown } from '../../../../../common/Dropdown';
 import { useGridView, type GridViewState } from '../../../../../common/hooks/useGridView';
 import { ViewChip, ColumnManager } from '../../../../../common/components/GridViewToggle';
 import AddMetricModal, { type NewMetricInput } from './AddMetricModal';
+import RawDataDrawer from './RawDataDrawer';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface MetricDef {
   key: string;
   label: string;
-  type: 'manual' | 'pipeline';
+  type: 'manual' | 'aggregated';
   unit: 'currency' | 'number' | 'percent';
 }
 
@@ -43,12 +44,13 @@ const METRICS: MetricDef[] = [
   { key: 'support_tickets',   label: 'Open Support Tickets',      type: 'manual',   unit: 'number'   },
   { key: 'csat',              label: 'CSAT Score',                type: 'manual',   unit: 'number'   },
   { key: 'feature_requests',  label: 'Feature Requests',          type: 'manual',   unit: 'number'   },
-  // Pipeline (CRM-synced)
-  { key: 'pipeline_arr',      label: 'Pipeline ARR',              type: 'pipeline', unit: 'currency' },
-  { key: 'renewal_prob',      label: 'Renewal Probability',       type: 'pipeline', unit: 'percent'  },
-  { key: 'expansion_arr',     label: 'Expansion ARR',             type: 'pipeline', unit: 'currency' },
-  { key: 'churn_risk',        label: 'Churn Risk Score',          type: 'pipeline', unit: 'number'   },
-  { key: 'days_to_renewal',   label: 'Days to Renewal',           type: 'pipeline', unit: 'number'   },
+  // Aggregated (backed by raw data rows; cell values are cumulative sums)
+  { key: 'monthly_avg_revenue', label: 'Monthly Avg. Revenue',    type: 'aggregated', unit: 'currency' },
+  { key: 'pipeline_arr',      label: 'Pipeline ARR',              type: 'aggregated', unit: 'currency' },
+  { key: 'renewal_prob',      label: 'Renewal Probability',       type: 'aggregated', unit: 'percent'  },
+  { key: 'expansion_arr',     label: 'Expansion ARR',             type: 'aggregated', unit: 'currency' },
+  { key: 'churn_risk',        label: 'Churn Risk Score',          type: 'aggregated', unit: 'number'   },
+  { key: 'days_to_renewal',   label: 'Days to Renewal',           type: 'aggregated', unit: 'number'   },
 ];
 
 // Full set of available time periods. The default System View hides the later months;
@@ -96,6 +98,7 @@ const METRIC_SEEDS: Record<string, { base: number; spread: number; step: number 
   support_tickets:   { base: 4,      spread: 14,     step: -0.4   },
   csat:              { base: 3.6,    spread: 1.2,    step:  0.05  },
   feature_requests:  { base: 2,      spread: 8,      step:  0.3   },
+  monthly_avg_revenue: { base: 310000, spread: 220000, step: 6200 },
   pipeline_arr:      { base: 290000, spread: 420000, step:  7000  },
   renewal_prob:      { base: 62,     spread: 28,     step:  1.2   },
   expansion_arr:     { base: 40000,  spread: 120000, step:  3500  },
@@ -304,6 +307,8 @@ export default function MetricDataPage() {
   const [cellEdits, setCellEdits] = useState<Record<string, CellEditMeta>>({});
   // Toggle to hide rows that have no dirty cells (only meaningful when there are drafts).
   const [showOnlyUpdated, setShowOnlyUpdated] = useState(false);
+  // Raw-data drawer (aggregated metrics): either a full table ('all') or a single cell.
+  const [rawDrawer, setRawDrawer] = useState<{ mode: 'all' | 'cell'; customer?: string; period?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Standard vs Personal view (ICA-2232). User is treated as a Configurator.
@@ -528,6 +533,7 @@ export default function MetricDataPage() {
 
   const columns = useMemo(() => {
     const isManual = selectedMetric.type === 'manual';
+    const isAggregated = selectedMetric.type === 'aggregated';
 
     return [
       // Checkbox column
@@ -652,8 +658,11 @@ export default function MetricDataPage() {
         size: 150,
         cell: (ctx: any) => {
           const rowId = ctx.row.original.id as string;
+          const customer = ctx.row.original.customer as string;
           const isRowDisabled = disabledIds.has(rowId);
           const cellEditable = isManual && !isRowDisabled;
+          // Aggregated cells aren't edited inline — clicking opens the raw-data drawer.
+          const cellOpensRaw = isAggregated && !isRowDisabled;
           const isEditing = cellEditable && editingCell?.rowId === rowId && editingCell?.colKey === period.key;
           const rawValue = ctx.getValue() as string;
           const dirty = isCellDirty(rowId, period.key);
@@ -684,15 +693,18 @@ export default function MetricDataPage() {
               className={`relative px-4 py-3 text-[14px] h-full group flex items-center gap-1.5 ${
                 isRowDisabled
                   ? 'text-[#9CA3AF] cursor-not-allowed'
-                  : cellEditable
-                  ? 'text-[#141C24] cursor-text hover:bg-blue-50/60'
+                  : cellEditable || cellOpensRaw
+                  ? 'text-[#141C24] cursor-pointer hover:bg-blue-50/60'
                   : 'text-[#141C24]'
               }`}
-              onClick={() => cellEditable && setEditingCell({ rowId, colKey: period.key })}
+              onClick={() => {
+                if (cellEditable) setEditingCell({ rowId, colKey: period.key });
+                else if (cellOpensRaw) setRawDrawer({ mode: 'cell', customer, period: period.label });
+              }}
             >
               {dirty && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
               <span>{formatValue(rawValue, selectedMetric)}</span>
-              {cellEditable && (
+              {(cellEditable || cellOpensRaw) && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-60 transition-opacity">
                   <PencilLine className="w-3 h-3 text-[#637083]" />
                 </span>
@@ -864,7 +876,7 @@ export default function MetricDataPage() {
           >
             <span className="flex-1 text-left">{selectedMetric.label}</span>
             <span className={`text-[11px] px-1.5 py-0.5 rounded-[4px] font-normal capitalize ${
-              selectedMetric.type === 'manual' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+              selectedMetric.type === 'manual' ? 'bg-green-50 text-green-600' : 'bg-indigo-50 text-indigo-400'
             }`}>
               {selectedMetric.type}
             </span>
@@ -875,7 +887,7 @@ export default function MetricDataPage() {
             <Dropdown.Trigger className="flex items-center gap-2 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors min-w-[220px]">
               <span className="flex-1 text-left">{selectedMetric.label}</span>
               <span className={`text-[11px] px-1.5 py-0.5 rounded-[4px] font-normal capitalize ${
-                selectedMetric.type === 'manual' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                selectedMetric.type === 'manual' ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'
               }`}>
                 {selectedMetric.type}
               </span>
@@ -896,7 +908,7 @@ export default function MetricDataPage() {
                     : <span className="w-3.5 shrink-0" />}
                   <span className="flex-1">{m.label}</span>
                   <span className={`text-[11px] px-1.5 py-0.5 rounded-[4px] capitalize ${
-                    m.type === 'manual' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                    m.type === 'manual' ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'
                   }`}>
                     {m.type}
                   </span>
@@ -953,8 +965,9 @@ export default function MetricDataPage() {
         {/* Right-side actions only when nothing is selected */}
         {!hasSelection && (
           <>
-            {/* "Show only updated row" toggle — disabled when there are no drafts */}
-            {(() => {
+            {/* "Show only updated row" toggle — inline-edit drafts only exist for
+                manual metrics (aggregated metrics edit via the raw-data drawer). */}
+            {selectedMetric.type !== 'aggregated' && (() => {
               const hasDrafts = dirtyCellKeys.total > 0;
               return (
                 <label
@@ -993,51 +1006,67 @@ export default function MetricDataPage() {
               />
             </div>
 
-            <Dropdown className="relative">
-              <Dropdown.Trigger className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
-                Download
-                <ChevronDown className="w-3.5 h-3.5 text-[#637083]" />
-              </Dropdown.Trigger>
-              <Dropdown.Content
-                placement="bottom"
-                className="absolute top-full right-0 z-50 mt-1 bg-white border border-[#E4E7EC] rounded-[8px] shadow-lg py-1 min-w-[180px]"
-              >
-                <button onClick={() => handleDownload('csv')} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
-                  <Download className="w-3.5 h-3.5 text-[#637083]" />
-                  CSV file
-                </button>
-                <button onClick={() => handleDownload('xlsx')} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
-                  <Download className="w-3.5 h-3.5 text-[#637083]" />
-                  Excel (.xlsx)
-                </button>
-              </Dropdown.Content>
-            </Dropdown>
+            {/* Download / Upload live in the raw-data drawer for aggregated metrics */}
+            {selectedMetric.type !== 'aggregated' && (
+              <>
+                <Dropdown className="relative">
+                  <Dropdown.Trigger className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
+                    Download
+                    <ChevronDown className="w-3.5 h-3.5 text-[#637083]" />
+                  </Dropdown.Trigger>
+                  <Dropdown.Content
+                    placement="bottom"
+                    className="absolute top-full right-0 z-50 mt-1 bg-white border border-[#E4E7EC] rounded-[8px] shadow-lg py-1 min-w-[180px]"
+                  >
+                    <button onClick={() => handleDownload('csv')} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
+                      <Download className="w-3.5 h-3.5 text-[#637083]" />
+                      CSV file
+                    </button>
+                    <button onClick={() => handleDownload('xlsx')} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
+                      <Download className="w-3.5 h-3.5 text-[#637083]" />
+                      Excel (.xlsx)
+                    </button>
+                  </Dropdown.Content>
+                </Dropdown>
 
-            <Dropdown className="relative">
-              <Dropdown.Trigger className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
-                Upload
-                <ChevronDown className="w-3.5 h-3.5 text-[#637083]" />
-              </Dropdown.Trigger>
-              <Dropdown.Content
-                placement="bottom"
-                className="absolute top-full right-0 z-50 mt-1 bg-white border border-[#E4E7EC] rounded-[8px] shadow-lg py-1 min-w-[200px]"
-              >
-                <button onClick={() => fileInputRef.current?.click()} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
-                  <Upload className="w-3.5 h-3.5 text-[#637083]" />
-                  Upload file
-                </button>
-                <button onClick={() => alert('Template download coming soon')} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
-                  <Download className="w-3.5 h-3.5 text-[#637083]" />
-                  Download template
-                </button>
-              </Dropdown.Content>
-            </Dropdown>
-            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
+                <Dropdown className="relative">
+                  <Dropdown.Trigger className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
+                    Upload
+                    <ChevronDown className="w-3.5 h-3.5 text-[#637083]" />
+                  </Dropdown.Trigger>
+                  <Dropdown.Content
+                    placement="bottom"
+                    className="absolute top-full right-0 z-50 mt-1 bg-white border border-[#E4E7EC] rounded-[8px] shadow-lg py-1 min-w-[200px]"
+                  >
+                    <button onClick={() => fileInputRef.current?.click()} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
+                      <Upload className="w-3.5 h-3.5 text-[#637083]" />
+                      Upload file
+                    </button>
+                    <button onClick={() => alert('Template download coming soon')} className="close-dropdown flex items-center gap-2 w-full px-3 py-2 text-[13px] text-[#141C24] hover:bg-[#F2F4F7] text-left">
+                      <Download className="w-3.5 h-3.5 text-[#637083]" />
+                      Download template
+                    </button>
+                  </Dropdown.Content>
+                </Dropdown>
+                <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
+              </>
+            )}
 
             <button className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors">
               <SlidersHorizontal className="w-3.5 h-3.5" />
               Filter
             </button>
+
+            {/* Aggregated metrics expose their underlying raw data */}
+            {selectedMetric.type === 'aggregated' && (
+              <button
+                onClick={() => setRawDrawer({ mode: 'all' })}
+                className="flex items-center gap-1.5 h-9 px-3 text-[13px] font-medium text-[#141C24] border border-[#E4E7EC] rounded-[8px] bg-white hover:bg-[#F9FAFB] transition-colors"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Raw data
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1107,6 +1136,17 @@ export default function MetricDataPage() {
           segments={AVAILABLE_SEGMENTS}
           onCancel={() => setShowAddMetricModal(false)}
           onSubmit={handleAddMetric}
+        />
+      )}
+
+      {/* Raw data drawer (aggregated metrics) */}
+      {rawDrawer && (
+        <RawDataDrawer
+          metricLabel={selectedMetric.label}
+          mode={rawDrawer.mode}
+          customerName={rawDrawer.customer}
+          periodLabel={rawDrawer.period}
+          onClose={() => setRawDrawer(null)}
         />
       )}
     </div>
