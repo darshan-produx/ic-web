@@ -33,6 +33,7 @@ const Header = () => {
   const navbarConfig = {
     data: {
       value: {
+        Dashboard: true,
         Priorities: true,
         Myteam: true,
         Customers: true,
@@ -70,6 +71,20 @@ const Header = () => {
                   </div>
                   <div className="flex gap-3 ms-auto w-full justify-center">
                     <div className="flex text-center text-sm py-4 gap-[15px]">
+                      {navbarConfig?.data?.value?.Dashboard &&
+                        myroles?.includes('USER') && (
+                          <Link href="/app/dashboard">
+                            <span
+                              className={
+                                pathname.includes('/app/dashboard')
+                                  ? 'border-b-2 pb-[17px] pt-3 px-[7.5px] relative top-[7px] border-gray-900 text-gray-900 cursor-pointer'
+                                  : 'text-gray-400 pb-[17px] pt-3 px-[7.5px] relative top-[7px] cursor-pointer'
+                              }
+                            >
+                              Dashboard
+                            </span>
+                          </Link>
+                        )}
                       {navbarConfig?.data?.value?.Priorities &&
                         myroles?.includes('USER') && (
                           <Link href="/app/priorities">
@@ -104,7 +119,7 @@ const Header = () => {
                           <Link href="/app/customers">
                             <span
                               className={
-                                pathname.includes('customers')
+                                pathname.includes('customers') || pathname.includes('action-plans')
                                   ? 'border-b-2 pb-[17px] pt-3 px-[7.5px] relative top-[7px] border-gray-900 text-gray-900 cursor-pointer'
                                   : 'text-gray-400 pb-[17px] pt-3 px-[7.5px] relative top-[7px] cursor-pointer'
                               }
